@@ -438,6 +438,50 @@ def bullet_standard_issues(bullet):
     return issues
 
 
+SUMMARY_BANNED = ['leveraged', 'seasoned', 'passionate', 'results-driven', 'results driven', 'proven track record',
+                  'dynamic', 'detail-oriented', 'responsible for', 'hard-working', 'go-getter', 'self-starter', 'team player']
+
+
+def summary_issues(resume, evidence, profile):
+    """A recruiter-grade summary: 3 prose sentences, identity + proof + fit."""
+    if not resume.summary:
+        return []
+    first = resume.summary[0].id
+    text = ' '.join(c.text for c in resume.summary)
+    words = len(text.split())
+    sentences = sum(max(1, len(re.findall(r'[.!?](?:\s|$)', c.text))) for c in resume.summary)
+    issues = []
+    if words < 40:
+        issues.append(f'{first}: summary too short ({words} words); write 3 sentences, 50-75 words: identity, proof with metrics, fit.')
+    elif words > 95:
+        issues.append(f'{first}: summary too long ({words} words); keep 3 sentences under 75 words.')
+    if sentences < 2:
+        issues.append(f'{first}: summary is a single sentence; write 3 sentences: identity, proof with metrics, fit.')
+    lowered = text.lower()
+    for phrase in SUMMARY_BANNED:
+        if phrase in lowered:
+            issues.append(f'{first}: remove "{phrase}" from the summary; state facts instead.')
+            break
+    if re.search(r"\b(i|my|me)\b", lowered):
+        issues.append(f'{first}: no first person in the summary.')
+    opener = resume.summary[0].text.split()
+    head = re.sub(r'[^a-z]', '', opener[0].lower()) if opener else ''
+    if head and (head.endswith('ed') or head in PAST_TENSE) and head not in ('experienced', 'skilled', 'versed', 'focused', 'specialized', 'certified', 'accomplished'):
+        issues.append(f'{first}: the summary opens with an identity sentence ("<Title> with N+ years ..."), not a bullet starting with "{opener[0]}".')
+    core = normalize(profile.title)
+    role_noun = ' '.join(w for w in core.split() if w not in ('senior', 'sr', 'junior', 'jr', 'lead', 'principal', 'staff', 'ii', 'iii', 'i'))
+    first_sentence = normalize(resume.summary[0].text)
+    if role_noun and role_noun not in first_sentence and normalize(resume.headline) not in first_sentence:
+        issues.append(f'{first}: the first sentence must name the role ("{profile.title}" or the closest honest variant).')
+    if re.search(r'\d+\s*\+?\s*years', ' '.join(evidence.values()), re.I) and not re.search(r'\d+\s*\+?\s*years', text, re.I):
+        issues.append(f'{first}: state the years of experience the source gives.')
+    scorable = [k for k in profile.keywords if k.kind not in ('credential', 'soft')]
+    hits = sum(1 for k in scorable if keyword_hits(k, normalize(text)))
+    if len(scorable) >= 3 and hits < 3:
+        issues.append(f'{first}: the summary names only {hits} job keyword(s); include at least 3 that the evidence supports.')
+    return issues
+
+
 def validate_draft(resume, evidence, profile):
     """Deterministic checks that never need a model call."""
     items = claims(resume)
@@ -461,15 +505,7 @@ def validate_draft(resume, evidence, profile):
         issues.append('Add a Skills section with skill_groups.')
     if not resume.headline.strip() or len(resume.headline) > 80:
         issues.append('headline: provide a short target-title headline.')
-    summary_words = sum(len(c.text.split()) for c in resume.summary)
-    summary_sentences = sum(max(1, len(re.findall(r'[.!?](?:\s|$)', c.text))) for c in resume.summary)
-    if resume.summary and summary_words > 40 and summary_sentences < 2:
-        issues.append(f'{resume.summary[0].id}: summary is one {summary_words}-word sentence; split it into 2-3 sentences.')
-    elif resume.summary and summary_words < 30:
-        issues.append(f'{resume.summary[0].id}: summary too short ({summary_words} words); write 2-3 sentences, 35-60 words, '
-                      'with years of experience and the top matched job keywords.')
-    elif summary_words > 90:
-        issues.append(f'{resume.summary[0].id}: summary too long ({summary_words} words); keep 2-3 sentences under 60 words.')
+    issues.extend(summary_issues(resume, evidence, profile))
     all_evidence = ' '.join(evidence.values())
     normalized_evidence = normalize(all_evidence)
     evidence_numbers = set(re.findall(NUMBER, all_evidence))

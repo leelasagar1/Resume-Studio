@@ -502,9 +502,16 @@ def test_source_groups_fold_into_similar_writer_groups_and_group_cap():
                                       for n in range(20, 27)]
     curate_skills(draft, evidence, profile)
     assert len(draft.sections[1].skill_groups) <= MAX_SKILL_GROUPS
+    from app.workflow import summary_issues
     draft = sample_draft(1)
-    draft.summary[0].text = ' '.join(['word'] * 45)
-    assert any('split it into 2-3 sentences' in i for i in validate_draft(draft, evidence, sample_profile()))
+    assert summary_issues(draft, evidence, sample_profile()) == []
+    draft.summary = [draft.summary[0].model_copy(update={'text': ' '.join(['word'] * 45)})]
+    issues = summary_issues(draft, evidence, sample_profile())
+    assert any('single sentence' in i for i in issues) and any('must name the role' in i for i in issues) and any('job keyword' in i for i in issues)
+    draft = sample_draft(1)
+    draft.summary[0].text = 'Leveraged SQL and Python at Harbor Analytics as a Data Analyst delivering weekly operations reviews.'
+    issues = summary_issues(draft, evidence, sample_profile())
+    assert any('remove "leveraged"' in i for i in issues) and any('opens with an identity sentence' in i for i in issues)
 
 
 def test_skeleton_headings_and_dates_are_verbatim_and_never_audited():

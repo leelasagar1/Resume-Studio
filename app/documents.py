@@ -95,9 +95,8 @@ def render_docx(resume: Resume) -> tuple[bytes, dict]:
     if resume.contact:
         doc.add_paragraph(' | '.join(c.text for c in resume.contact))
     if resume.summary:
-        doc.add_heading('Summary', level=1)
-        for claim in resume.summary:
-            doc.add_paragraph(claim.text)
+        doc.add_heading('Professional Summary', level=1)
+        doc.add_paragraph(' '.join(claim.text.strip() for claim in resume.summary))
     for section in resume.sections:
         doc.add_heading(section.heading, level=1)
         for entry in section.entries:

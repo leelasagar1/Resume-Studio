@@ -86,8 +86,12 @@ and `claude-sonnet-5`.
    evidence lines, the keyword list and exactly which keywords are still
    missing. Each role call sees only that role's source lines and returns
    5-6 bullets; the header call returns summary, headline and skill groups.
-   Small outputs are what cheap models do reliably. On revision only the
-   roles named in the feedback are rewritten. Python reassembles the resume
+   Small outputs are what cheap models do reliably. The header call runs
+   after the role calls so the summary can cite the strongest final
+   bullets: three sentences (identity with years and specialization,
+   proof with real metrics, fit with the job's tools), checked by Python
+   for length, role name, years, keyword count and banned filler. On
+   revision only the roles named in the feedback are rewritten. Python reassembles the resume
    around the verbatim skeleton,
    so companies, titles, dates, degrees and certifications cannot be changed
    or dropped. Every bullet and summary line cites the evidence lines that

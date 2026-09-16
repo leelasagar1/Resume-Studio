@@ -129,7 +129,7 @@ function renderResult(job) {
   preview.append(el('h2', resume.name.text));
   if (resume.headline) preview.append(el('p', resume.headline, 'headline'));
   preview.append(el('div', resume.contact.map(c => c.text).join(' | '), 'contact-line'));
-  if (resume.summary.length) { preview.append(el('h3', 'Summary')); resume.summary.forEach(c => preview.append(el('p', c.text))); }
+  if (resume.summary.length) { preview.append(el('h3', 'Professional Summary'), el('p', resume.summary.map(c => c.text.trim()).join(' '))); }
   for (const section of resume.sections) {
     preview.append(el('h3', section.heading));
     for (const entry of section.entries) {

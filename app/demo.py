@@ -52,8 +52,9 @@ def sample_draft(version=0):
     return Resume.model_validate({
         'name': c('name', 'Alex Morgan', 'E1'), 'headline': 'Data Analyst',
         'contact': [c('c1', 'alex.morgan@example.com | 555-010-2000 | Boston, MA', 'E2')],
-        'summary': [c('s1', 'Data analyst with SQL reporting, Python automation, Tableau and stakeholder presentation experience at Harbor Analytics and Northstar Labs, delivering weekly operations reviews, cleaned customer datasets and monthly findings that operations stakeholders act on.',
-                      'E3', 'E5', 'E6', 'E7', 'E11')],
+        'summary': [c('s1', 'Data Analyst with SQL reporting and Python automation experience at Harbor Analytics and Northstar Labs, specializing in operations reporting.', 'E3', 'E5', 'E6', 'E8'),
+                    c('s2', 'Automated recurring reports with Python, reducing preparation time by 30%, and built the SQL reports behind weekly operations reviews.', 'E5', 'E6'),
+                    c('s3', 'Brings SQL, Python and Tableau skills with a record of presenting monthly findings to operations stakeholders.', 'E7', 'E11')],
         'sections': [
             {'heading': 'Experience', 'entries': [
                 {'heading': c('j1', 'Data Analyst | Harbor Analytics', 'E3'),

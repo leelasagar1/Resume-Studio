@@ -73,17 +73,40 @@ On revision you receive previous_bullets and feedback for this role only:
 fix each listed issue, keep the other bullets and their ids unchanged.
 '''
 
-HEADER_PROMPT = RULES + STYLE + '''You write the headline, summary and Skills section of the candidate's
-resume for the target job. Inputs: candidate_evidence (E-prefixed source lines
-of the whole resume), the resume header (name, headline, contact, summary
-lines, skills lines), the job (title, keywords, responsibilities) and
-keyword_status.
+HEADER_PROMPT = RULES + '''You write the headline, professional summary and Skills section of the
+candidate's resume for the target job. Inputs: candidate_evidence (E-prefixed
+source lines of the whole resume), the resume header (name, headline, contact,
+original summary lines, skills lines), final_bullets (the rewritten experience
+bullets that will appear in the resume), the job (title, keywords,
+responsibilities) and keyword_status.
 
 headline: the target job title or its closest honest variant.
-summary: 2-3 sentences, 35-60 words total, each a Claim citing E ids that
-support it; lead with years of experience and the strongest matched job
-keywords; weave in soft skills the evidence supports (stakeholders,
-cross-functional work). No unevidenced keywords.
+
+summary: a recruiter reads this in six seconds and decides whether to keep
+reading. Write exactly 3 sentences, 50-75 words total, as ONE paragraph
+split into 3 Claims (one sentence each), each citing the E ids that support
+it. It is prose in the third person without pronouns, NOT bullets:
+  1. Identity: "<Target title or closest honest variant> with <N>+ years of
+     <what> across <domains/industries>, specializing in <2-3 strongest areas
+     that the job asks for>." Take the years figure only from the evidence.
+  2. Proof: the two or three strongest achievements from final_bullets, with
+     their real metrics (percentages, scale) exactly as in the evidence, in
+     the job's terminology.
+  3. Fit: the tools and methods the job requires that the evidence shows
+     (name 4-6 exact job keywords), and the working style the evidence
+     supports (stakeholders, cross-functional teams, production delivery).
+The first sentence must not start with a verb ("Built ...", "Leveraged ...").
+Never use "I", "my", "leveraged", "seasoned", "passionate",
+"results-driven", "proven track record", "dynamic", "detail-oriented",
+"responsible for". No unevidenced keywords; unknown facts are left out.
+Example of the register (fictional): "Senior Data Scientist with 6+ years
+building forecasting and optimization models for retail supply chains,
+specializing in demand planning and inventory analytics. Delivered a 12%
+reduction in warehouse operating cost through Prophet/LSTM demand models and
+an 80% faster PySpark data pipeline. Brings Python, SQL, Spark, MLflow and
+Databricks expertise with a record of turning model findings into decisions
+for operations and leadership teams."
+
 skill_groups: 4-5 labelled groups, at most 8 items each, one skill per item,
 rebuilt from the candidate's skills lines plus the missing job keywords. Keep
 items relevant to the job or demonstrated in the experience; drop the rest.
@@ -315,6 +338,7 @@ class OpenAIProvider:
         header_needed = previous is None or bool(flagged_ids & previous_summary_ids) or any(
             'summary' in i or 'headline' in i or 'skill' in i.lower() for i in issues) or bool(keyword_status.get('missing'))
         header_task = None
+        header_payload = None
         if header_needed:
             payload = {'resume_header': {k: skeleton[k] for k in ('name', 'headline', 'contact')},
                        'summary_lines': [l for s in skeleton['sections'] if s['kind'] == 'summary' for l in s['lines']],
@@ -324,10 +348,11 @@ class OpenAIProvider:
                 payload['previous_header'] = {'headline': previous.headline, 'summary': [c.model_dump() for c in previous.summary],
                                               'skill_groups': [g.model_dump() for s in previous.sections for g in s.skill_groups]}
                 payload['feedback'] = [i for i in issues if i.split(':', 1)[0] in previous_summary_ids]
-            header_task = self._call(HEADER_PROMPT, payload, HeaderRewrite, self.writer_model,
-                                     context=self._context(evidence))
-        results = await asyncio.gather(*tasks, *([header_task] if header_task else []))
-        written = iter(results[:len(tasks)])
+            header_payload = payload
+            header_task = lambda: self._call(HEADER_PROMPT, header_payload, HeaderRewrite, self.writer_model,
+                                             context=self._context(evidence))
+        results = await asyncio.gather(*tasks)
+        written = iter(results)
         entries = []
         for action, entry_id, bullets in plan:
             if action == 'keep':
@@ -335,7 +360,11 @@ class OpenAIProvider:
             else:
                 entries.append(EntryBullets(entry_id=entry_id, bullets=next(written).bullets))
         if header_task:
-            header = results[-1]
+            # The summary is written last so it can cite the strongest final bullets.
+            headings = {e['entry_id']: e['heading'] for s in skeleton['sections'] for e in s['entries']}
+            header_payload['final_bullets'] = [{'role': headings.get(e.entry_id, e.entry_id),
+                                                'bullets': [b.text for b in e.bullets if not b.proposed]} for e in entries]
+            header = await header_task()
         else:
             header = HeaderRewrite(headline=previous.headline, summary=list(previous.summary),
                                    skill_groups=[g for s in previous.sections for g in s.skill_groups])
