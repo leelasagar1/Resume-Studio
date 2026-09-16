@@ -649,7 +649,7 @@ def test_missed_audit_claims_are_retried_then_treated_conservatively():
     provider = Forgetful(drafts=[sample_draft(1)])
     result = asyncio.run(run_workflow(request(max_revisions=0), provider, silent))
     assert provider.audit_calls == 2
-    assert Resume.model_validate(result['resume']).summary == []
+    assert [c.id for c in Resume.model_validate(result['resume']).summary] == ['s2', 's3'], 'only the unaudited s1 is stripped'
 
 
 # ---------------------------------------------------------------- documents
