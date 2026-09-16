@@ -324,7 +324,7 @@ def test_strip_unsupported_removes_bullets_but_not_headings():
     draft = sample_draft(1)
     stripped = strip_unsupported(draft, {'j1b2', 's1'})
     assert [b.id for b in stripped.sections[0].entries[0].bullets] == ['j1b1', 'j1b3', 'j1p1']
-    assert stripped.summary == []
+    assert [c.id for c in stripped.summary] == ['s2', 's3']
     assert strip_unsupported(draft, {'j1'}) is None
 
 
