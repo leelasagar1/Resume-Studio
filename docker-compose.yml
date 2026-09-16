@@ -1,7 +1,9 @@
 services:
   resume-studio:
     build: .
+    image: resume-studio
     env_file: .env
     ports:
-      - "127.0.0.1:8765:8765"
+      # Host port is configurable: PORT=9000 docker compose up
+      - "127.0.0.1:${PORT:-8765}:8765"
     restart: unless-stopped

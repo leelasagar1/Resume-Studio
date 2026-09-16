@@ -31,10 +31,19 @@ the only required edit; the defaults use `gpt-4.1-mini` and `gpt-4.1-nano`
 
 **Docker** (alternative, no Python install needed)
 
+Install Docker Desktop (https://www.docker.com/products/docker-desktop/) and
+start it. Then, in the project folder:
+
 ```bash
-cp .env.example .env    # then add your key
-docker compose up --build
+cp .env.example .env          # Windows PowerShell: copy .env.example .env
+# open .env and paste your OPENAI_API_KEY
+docker compose up --build -d  # first run builds the image (~1 minute)
 ```
+
+Open http://127.0.0.1:8765. `docker compose logs -f` shows the server log,
+`docker compose down` stops it, `docker compose up --build -d` again after
+pulling code changes. The port is published on localhost only; set
+`PORT=9000` before the command to use another host port.
 
 Open http://127.0.0.1:8765. **Try an example** runs a fixed fictional demo
 with no API calls, so you can check the install before adding a key.
