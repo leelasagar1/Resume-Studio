@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resume Studio</title>
+  <meta name="description" content="Turn your experience into a focused, evidence-backed resume.">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Resume Studio home"><span class="brand-mark">r<span>↗</span></span>resume<span class="brand-light">studio</span></a>
+    <div class="top-actions"><span class="local-tag"><i></i> Local workspace</span><button class="text-button" id="example">Try an example <span aria-hidden="true">↗</span></button></div>
+  </header>
+  <main>
+    <div class="intro"><div><p class="eyebrow">YOUR NEXT CHAPTER</p><h1>Your experience.<br>A more focused resume.</h1></div><p class="intro-note">Built around the role.<br>Grounded in what you’ve done.</p></div>
+    <div class="setup-notice" id="setup-notice" hidden>Live generation needs an API key on your server. <button class="inline-button" id="setup-toggle" aria-expanded="false">Setup instructions</button><div id="setup-help" hidden>In the project folder, copy <code>.env.example</code> to <code>.env</code>, set <code>OPENAI_API_KEY</code>, <code>OPENROUTER_API_KEY</code> or <code>CLAUDE_API_KEY</code>, then restart the Python server. Select your provider and model below. Never enter your key into this page.</div></div>
+    <div id="error" class="error" role="alert" hidden></div>
+    <div class="workspace">
+      <section class="input-panel" aria-labelledby="input-title">
+        <div class="panel-heading"><h2 id="input-title">The starting point</h2><span class="small-label">01 / INPUTS</span></div>
+        <form id="resume-form">
+          <div class="field-heading"><label for="resume-text">Your resume</label><label class="upload-button" for="resume-file"><span aria-hidden="true">↑</span> Upload file<input id="resume-file" type="file" accept=".pdf,.docx,.txt"></label></div>
+          <p class="field-help" id="resume-help">Paste your resume or upload PDF, DOCX, or TXT. Up to 5 MB.</p>
+          <textarea id="resume-text" aria-describedby="resume-help" placeholder="Your name, experience, projects, education, and skills…" maxlength="16000" minlength="80" required></textarea>
+          <p class="file-status" id="resume-file-status" aria-live="polite"></p>
+          <div class="field-heading job-heading"><label for="job-text">Job description</label><label class="upload-button" for="job-file"><span aria-hidden="true">↑</span> Upload file<input id="job-file" type="file" accept=".pdf,.docx,.txt"></label></div>
+          <textarea id="job-text" placeholder="Paste the role’s responsibilities and qualifications…" maxlength="14000" minlength="80" required></textarea>
+          <p class="file-status" id="job-file-status" aria-live="polite"></p>
+          <details class="additional"><summary>Anything your resume leaves out? <span>Optional</span></summary><label for="facts" class="sr-only">Additional confirmed experience</label><textarea id="facts" maxlength="4000" placeholder="Add real projects, tools you’ve used, or results you can substantiate. Distinguish personal projects from professional work."></textarea></details>
+          <fieldset class="model-settings"><legend>Generation model</legend>
+            <label for="provider">Provider</label><select id="provider" required aria-describedby="model-help"><option value="">Loading providers…</option></select>
+            <label for="model">Model</label><input id="model" type="text" list="model-options" required maxlength="160" pattern="[A-Za-z0-9][A-Za-z0-9._:/\-]*" placeholder="Choose or enter a model ID" autocomplete="off"><datalist id="model-options"></datalist>
+            <p class="field-help" id="model-help">One model writes and audits. It must support structured JSON output.</p>
+          </fieldset>
+          <div class="options-row"><label for="revisions">Rounds</label><select id="revisions"><option value="0">Fast · one draft</option><option value="1">Up to 1 revision</option><option value="2" selected>Up to 2 revisions</option><option value="3">Up to 3 revisions</option></select></div>
+          <div class="options-row"><label for="target">Target ATS score</label><select id="target"><option value="85">85</option><option value="90" selected>90</option><option value="95">95</option></select></div>
+          <label class="confirmation"><input id="confirmed" type="checkbox" required><span>I’ve reviewed the source text and confirm it reflects my actual experience.</span></label>
+          <button class="primary-button" id="generate" type="submit">Generate my resume <span aria-hidden="true">↗</span></button>
+          <p class="privacy-note">Live generation sends this text to your selected AI provider. Files are processed locally; run data clears after one hour or when you clear the run.</p>
+        </form>
+      </section>
+      <section class="output-panel" aria-label="Resume results">
+        <div class="panel-heading"><h2>Your tailored resume</h2><span class="small-label">02 / OUTPUT</span></div>
+        <div id="empty-state" class="empty-state">
+          <div class="paper-illustration" aria-hidden="true"><span class="paper-monogram">Aa</span><span class="paper-line wide"></span><span class="paper-line"></span><span class="paper-section"></span><span class="paper-line wide"></span><span class="paper-line wide"></span><span class="paper-line"></span><span class="paper-section"></span><span class="paper-line wide"></span><span class="paper-line"></span><span class="paper-seal">✓</span></div>
+          <h3>A clearer story, ready to send.</h3><p>Your resume preview and match report<br>will appear here.</p>
+          <div class="how-it-works"><div><span>1</span><p><strong>Extract</strong>Pull the job’s ATS keywords.</p></div><div><span>2</span><p><strong>Tailor</strong>Rewrite with the job’s terms, audited against your facts.</p></div><div><span>3</span><p><strong>Confirm</strong>Keep only skills you really have, then download Word.</p></div></div>
+          <p class="score-explainer">The ATS score is deterministic keyword matching, like the scanners employers use.<br>It is not a hiring prediction.</p>
+        </div>
+        <div id="progress-state" hidden aria-live="polite">
+          <p class="eyebrow" id="run-kind">YOUR RESUME IS TAKING SHAPE</p><h3 id="progress-message">Starting your workflow</h3>
+          <progress id="progress-bar" max="100" value="0"></progress>
+          <ol class="stages"><li data-stage="analyzing">Read the role</li><li data-stage="writing">Tailor your experience</li><li data-stage="reviewing">Review the draft</li><li data-stage="exporting">Prepare your download</li></ol>
+          <p class="muted">Each claim is audited against your source text. Typical live run: 1–3 minutes.</p><button class="text-button" id="cancel">Cancel and clear run</button>
+        </div>
+        <div id="result-state" hidden>
+          <div class="result-top"><span class="result-label" id="result-label">REVIEW COMPLETE</span><button class="text-button" id="clear">Clear run</button></div>
+          <div class="score-row"><div class="score-number"><span id="score">—</span><small>/100</small></div><div><h3>ATS keyword score</h3><p id="score-caption">Exact-match keyword coverage of this job.</p></div></div>
+          <div id="score-comparison" class="score-comparison"></div>
+          <p id="stop-reason" class="stop-reason"></p>
+          <section id="confirm-section" class="confirm-section" aria-labelledby="confirm-title" hidden>
+            <h3 id="confirm-title">Content to confirm</h3>
+            <p>Nothing below was found in your source text. It was added so the job's required keywords appear in your experience and skills. Uncheck anything you did not actually do or could not discuss in an interview. Unchecked items are removed and the score recomputed.</p>
+            <h4 class="confirm-subtitle" id="bullets-title">Proposed experience bullets</h4>
+            <div id="bullet-list"></div>
+            <h4 class="confirm-subtitle" id="skills-title">Skills</h4>
+            <div id="proposal-list"></div>
+            <label class="confirmation"><input type="checkbox" id="reviewed-additions"><span>I reviewed every item. The checked ones are true of my experience.</span></label>
+            <button type="button" id="finalize" class="primary-button">Apply and prepare Word file</button>
+          </section>
+          <a class="primary-button download" id="download" href="#">Download Word document <span aria-hidden="true">↓</span></a>
+          <div class="result-tabs" role="tablist" aria-label="Result view"><button id="preview-tab" role="tab" aria-selected="true" aria-controls="preview-pane">Resume preview</button><button id="report-tab" role="tab" aria-selected="false" aria-controls="report-pane" tabindex="-1">Keyword report</button></div>
+          <div id="preview-pane" role="tabpanel" aria-labelledby="preview-tab"><article class="resume-paper" id="resume-preview"></article><p class="preview-note">Text preview. Check page breaks in the downloaded Word file.</p></div>
+          <div id="report-pane" role="tabpanel" aria-labelledby="report-tab" hidden><div id="coverage-list"></div><div id="eligibility"></div><div id="questions"></div><details class="score-details"><summary>Score breakdown and run details</summary><div id="score-details"></div></details><details class="score-details"><summary>Source evidence</summary><div id="evidence-list"></div></details></div>
+        </div>
+      </section>
+    </div>
+    <footer><span>Less rewriting. More relevant experience.</span><span>Made for your next move.</span></footer>
+  </main>
+</body>
+</html>

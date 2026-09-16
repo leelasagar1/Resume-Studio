@@ -1,0 +1,19 @@
+# secrets and local state
+.env
+.venv/
+venv/
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# editors / OS
+.DS_Store
+.idea/
+.vscode/
+.claude/launch.json
+
+# generated documents
+*.docx
+!demo_files/*.docx

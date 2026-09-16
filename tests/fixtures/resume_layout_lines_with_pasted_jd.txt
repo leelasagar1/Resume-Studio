@@ -1,0 +1,117 @@
+Leela Sagar Gudhe
+leelasagar.gudhe@gmail.com  |  571-587-5998  |  New York City, NY  |  linkedin.com/in/leela-sagar-ls
+
+PROFESSIONAL SUMMARY
+5+ years of experience delivering data-science solutions that evaluate and improve conversational AI systems while upholding AI safety and fairness standards.
+Designed LLM-as-Judge frameworks using Python and GPT-4 to assess model hallucination and intent accuracy across multilingual datasets.
+Implemented automated monitoring dashboards on Azure and AWS SageMaker that surface fairness, bias, and governance metrics in real time.
+Developed Python pipelines with pandas, scikit-learn, and PyTorch to preprocess voice-based language data for large-scale model validation.
+Analyzed bias and fairness across demographic slices, applying mitigation techniques that align with responsible AI governance frameworks.
+Built reproducible experiment environments using Docker and Git, enabling consistent evaluation of generative AI model iterations.
+Collaborated with annotation teams to refine labeling guidelines, improving intent classification quality for conversational agents.
+Created Jupyter Notebook reports that translate technical evaluation results into actionable insights for non-technical stakeholders.
+Integrated governance checks into CI/CD pipelines, automating bias and fairness compliance before model deployment.
+Produced detailed evaluation summaries that support strategic product roadmaps and responsible AI reviews.
+Evaluated model outputs for bias and fairness using statistical checks, initiating AI safety considerations early in the development cycle.
+Designed end-to-end evaluation workflows that combine data-science tooling with generative AI metrics for comprehensive model assessment.
+Implemented cloud-native data ingestion pipelines on AWS S3 and Lambda, ensuring reliable handling of voice transcript files.
+Built automated monitoring scripts that track hallucination rates, intent accuracy, and fairness metrics across production chatbots.
+Analyzed fairness metrics across multilingual user groups, documenting findings for governance compliance.
+Developed prototype generative language models based on GPT-2 to generate sample chatbot responses for internal testing.
+Created cloud-based monitoring solutions that log performance dashboards for governance and responsible AI reviews.
+Collaborated with product owners to define evaluation criteria for voice-based language data, ensuring comprehensive metric coverage.
+Produced Jupyter Notebook dashboards visualizing intent accuracy trends to facilitate stakeholder reviews.
+Integrated bias mitigation techniques into evaluation pipelines, enhancing model fairness across diverse user populations.
+
+SKILLS
+Languages: Python
+Frameworks: pandas, scikit-learn, NumPy, TensorFlow, PyTorch
+Cloud & Data: Amazon Web Services (AWS), Microsoft Azure
+Generative AI: LLMs, GPT-2, GPT-3, GPT-4
+AI Safety & Responsible AI: AI safety, Responsible AI, fairness, governance frameworks, bias mitigation
+Tools: Jupyter Notebook, Git, Docker
+Visualization: Matplotlib, Seaborn, Plotly
+Platforms: AWS SageMaker, Azure Machine Learning
+
+EXPERIENCE
+Senior AI/ML Engineer — Con Edison    	January 2025 – Present
+New York City, NY
+Designed robust evaluation framework for enterprise conversational AI, employing GPT-4 LLM-as-Judge models and Python-based data science tooling to ensure high-fidelity results.
+Implemented automated monitoring dashboards on Azure that track hallucination rates, intent accuracy, and fairness metrics, providing continuous governance oversight.
+Assessed large-scale voice transcript datasets with pandas and scikit-learn, validating model performance against established Responsible AI standards.
+Collaborated with annotation specialists to improve label consistency for multilingual AI evaluation, enhancing data quality across ten language variants.
+Integrated governance frameworks into CI/CD pipelines using Docker and Git, automating compliance checks for bias and fairness before model deployment.
+Presented comprehensive evaluation reports to cross-functional leaders, translating technical insights into strategic recommendations for AI product roadmaps.
+
+ML Engineer — Munich Re    	May 2024 – December 2024
+Princeton, NJ
+Developed LLM-as-Judge framework leveraging GPT-4 to assess conversational AI outputs, integrating custom metrics for hallucination detection and intent precision.
+Created cloud-native monitoring solution on AWS SageMaker that automatically logs model performance dashboards for governance and responsible AI reviews.
+Examined bias across diverse demographic datasets, applying fairness algorithms and updating governance frameworks to meet regulatory standards.
+Collaborated with annotation teams to refine labeling protocols for intent classification, increasing label quality and reducing ambiguity.
+Built automated Python pipelines using pandas and PyTorch to process voice-based language data, supporting large-scale model evaluation.
+Presented evaluation findings to senior stakeholders, translating technical metrics into actionable recommendations for product improvement.
+
+Machine Learning Engineer — Tata Consultancy Services    	June 2020 – January 2022
+Hyderabad, India
+Designed end-to-end evaluation framework for chatbot models using Python, scikit-learn and custom LLM-as-Judge metrics, aligning with Responsible AI guidelines.
+Implemented automated monitoring scripts on Azure that tracked hallucination rates and intent accuracy across production conversational agents, delivering real-time alerts.
+Analyzed fairness metrics across multilingual user groups, applying bias mitigation techniques and documenting findings for governance frameworks compliance.
+Built reproducible experiment pipelines with Docker and Git, enabling team members to evaluate new LLM versions such as GPT-3 consistently.
+Collaborated with product owners to define evaluation criteria for voice-based language data, ensuring metrics captured both accuracy and user satisfaction.
+Produced detailed Jupyter Notebook reports summarizing model validation results, facilitating cross-functional communication of technical findings.
+
+Associate Data Scientist — Sosio Technologies    	Dec 2019 – May 2020
+Hyderabad, India
+Developed Python scripts using pandas and scikit-learn to preprocess customer support text data, enabling early sentiment analysis that informed product improvement discussions.
+Implemented a prototype generative language model based on GPT-2 to generate sample chatbot responses, demonstrating foundational Generative AI and LLM knowledge for internal testing.
+Evaluated model output for bias and fairness using statistical checks, initiating early AI safety considerations within the team.
+Built automated data pipelines on Amazon Web Services (AWS) S3 and Lambda, ensuring reliable ingestion of voice transcript files for analysis.
+Collaborated with annotation engineers to improve label quality for intent classifications, creating guidelines that increased annotation consistency.
+Created Jupyter Notebook dashboards visualizing intent accuracy trends, facilitating stakeholder reviews of early conversational model performance.
+
+EDUCATION
+Master in Data Analytics Engineering    	2024
+George Mason University
+Bachelor in Information Technology    	2020
+GMR Institute of Technology
+
+CERTIFICATIONS
+Databricks Certified Data Engineer Associate
+AI safety, Generative AI, LLMs, Python, Responsible AI, bias, cloud-based AI platforms, conversational AI systems, data science tooling, fairness, governance frameworks
+
+# Job Summary
+
+Build and maintain a robust evaluation framework for conversational AI systems.
+
+# Key Responsibilities
+
+- Design and develop LLM-as-a-Judge evaluation frameworks.
+- Build automated monitoring solutions.
+- Collaborate with teams to identify metrics and evaluation criteria.
+- Validate model performance and report metrics.
+- Continuously calibrate and improve evaluation models.
+- Analyze hallucination rates, intent accuracy, and fairness metrics.
+- Create dashboards for governance and responsible AI reviews.
+- Collaborate with annotation teams to improve label quality.
+- Support future multilingual AI evaluation initiatives.
+
+# Technical Stack & Skills
+
+- Python and data science tooling
+- Experience with Generative AI, LLMs, or conversational AI systems
+- Familiarity with AI safety, Responsible AI, fairness, bias, and governance frameworks
+- Experience with cloud-based AI platforms
+
+# Requirements & Qualifications
+
+- Master's degree or PhD in Data Science, Statistics, Computer Science, Machine Learning, or related field
+- 3+ years of experience in data science, machine learning, analytics, or AI model evaluation
+- Experience analyzing voice-based language data
+- Experience designing experiments and evaluating machine learning models
+- Knowledge of statistical analysis, sampling methodologies, and model validation techniques
+- Experience communicating technical findings to both technical and non-technical stakeholders
+
+# Benefits & Perks
+
+- Not specified in the provided text

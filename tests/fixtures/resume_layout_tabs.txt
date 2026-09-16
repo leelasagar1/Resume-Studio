@@ -1,0 +1,54 @@
+Leela Sagar Gudhe
+Senior AI / ML Engineer
+571-587-5998 | leelasagar.gudhe@gmail.com | linkedin.com/in/leela-sagar-ls
+PROFESSIONAL SUMMARY
+Data Scientist with 5+ years of experience building production ML and NLP systems across the energy, insurance, and logistics sectors. Specializes in anomaly detection, fraud-pattern modeling, and NLP pipelines that extract intelligence from unstructured text translating complex model findings into clear narratives for non-technical stakeholders. Hands-on with Python, SQL, Databricks, and cloud-native ML services on Azure and AWS, with experience designing scalable models within Data Lakehouse architectures.
+WORK EXPERIENCE
+Con Edison, Senior AI/ML Engineer	January 2025 – Present | New York City, NY
+Built a general purpose RAG application using LangChain and Vertex AI to give non technical teams across the company natural language access to internal documentation, policies, and historical case data, replacing manual keyword search across disconnected systems.
+Evaluated multiple retrieval strategies (semantic search, Parent Document Retriever, hybrid keyword plus vector search) using hit rate and mean reciprocal rank, improving answer relevance by 20%.
+Implemented guardrails and prompt constraints to keep responses grounded strictly in retrieved context, reducing hallucinated or unsupported answers during evaluation.
+Designed a scalable ingestion pipeline in Databricks and PySpark that unified content from multiple internal systems into a single vectorstore, refreshed on a schedule via Dagster.
+Integrated the RAG pipeline with Databricks workflows and MLflow for experiment tracking, enabling systematic evaluation of retrieval strategies (e.g., Parent Document Retriever) against hit rate and MRR metrics.
+Built an NLP-based entity resolution system using OpenAI embeddings and cosine similarity to reconcile inconsistent customer and asset records across source systems, reducing manual data cleaning effort by 50% and improving downstream data quality for investigative queries.
+Developed a Retrieval-Augmented Generation (RAG) assistant over regulatory and operational documents using LangChain, OpenAI GPT-4, and FAISS vector search, enabling engineers to query procedural records in natural language and cutting research time by roughly 40%.
+Trained and productionized ML solution for customer propensity scoring, giving sales teams a prioritized list of high-likelihood customers and improving outreach conversion.
+Translated complex model findings into clear stakeholder narratives and written technical reports, bridging the gap between data science outputs and decisions made by product, operations, and leadership teams.
+Built end-to-end ML pipelines on Databricks using MLflow for experiment tracking, model registry, and automated CI/CD deployment, standardizing the path from model training to production across the team.
+Set up automated model monitoring with data-drift detection and performance tracking, with scheduled retraining workflows that caught degradation early and kept production models audit-ready.
+Containerized and deployed scalable ML models via Docker and FastAPI endpoints on Azure, ensuring consistent serving infrastructure across investigative and operational ML projects.
+Munich Re, ML Engineer	May 2024 – December 2024 | Princeton, NJ
+Designed and built a Retrieval Augmented Generation (RAG) pipeline using LangChain and a vector database to let underwriters query fleet telemetry reports, claims files, and reinsurance treaty wordings in natural language, reducing average document research time by roughly 40 percent.
+Engineered a document ingestion and chunking pipeline in PySpark on Databricks to process unstructured policy documents, loss reports, and IoT sensor summaries, with metadata tagging by line of business, region, and peril type to improve retrieval accuracy.
+Built the embedding and semantic search layer with a reranking step to boost retrieval precision, and grounded LLM responses in cited source passages to meet auditability standards expected in an insurance and reinsurance environment.
+Tracked experiments and prompt versions with MLflow and established an evaluation framework covering retrieval hit rate, answer faithfulness, and hallucination rate, catching quality regressions before releases.
+Partnered with underwriting and actuarial stakeholders to scope requirements and run a pilot with a small group of analysts, translating feedback into iterative improvements that increased user adoption and query success rate.
+Deployed the assistant behind role based access controls and integrated it with structured claims data lookups, combining generative answers with verified numeric data for higher trust in outputs.
+Built a feature store from telemetry data (driving behavior, mileage, incident history) and historical loss data to engineer signals predicting fleet risk segments.
+Trained and validated a supervised model for fleet risk scoring, balancing accuracy and interpretability so underwriters could trust and act on predictions.
+Orchestrated ingestion, retraining, and scoring as scheduled jobs, with monitoring dashboards tracking prediction and feature drift to close the loop between production behavior and retraining decisions.
+Tata Consultancy Services, Machine Learning Engineer	June 2020 – January 2022 | Hyderabad, India
+Developed unsupervised anomaly-detection models (Isolation Forest, Autoencoders) on shipment telemetry to flag suspicious delays and exceptions in near real time, reducing manual escalations by giving investigators a prioritized queue of high-risk cases.
+Built gradient-boosted models (XGBoost) using Python and SQL to identify behavioral patterns in route, weather, and historical shipment data, improving prediction accuracy by roughly 22% over the rule-based baseline and generating actionable intelligence for operations teams.
+Built automated ML training and deployment pipelines on AWS (SageMaker, Glue, Lambda, S3, EMR) with GitLab CI/CD, reducing release cycle time by 30% and enabling consistent model delivery across investigative and operational use cases.
+Extracted, normalized, and transformed 5TB+ daily data workloads by migrating legacy Python scripts to PySpark and AWS Glue, improving processing speed by 80% and enabling scalable data preparation for varied investigative projects.
+Designed time-series forecasting models (Prophet, LSTM) in Python for warehouse-level demand planning, reducing operational expenses by 12% through improved inventory decisions backed by data-driven narratives presented to management.
+Implemented automated monitoring for data and concept drift with threshold-triggered retraining, preventing a 6% performance degradation in production models and maintaining model reliability for audit-sensitive workflows.
+Containerized ML models with Docker and orchestrated batch and real-time inference workflows with Airflow on AWS, making model deployment consistent and reproducible across projects.
+Sosio Technologies, Associate Data Scientist	Dec 2019 – May 2020 | Hyderabad, India
+Wrote Python and SQL ETL pipelines to extract data from relational databases and flat files and load it into a central data warehouse for analytics and reporting.
+Wrote complex SQL queries, stored procedures, and views to clean and aggregate raw transactional data for BI dashboards.
+Automated recurring ingestion and transformation jobs using Python and cron scheduling, replacing manual processes and improving pipeline reliability.
+Assisted with data modeling work including normalized schemas and dimensional tables to improve query performance for analytical workloads.
+Used Pandas and NumPy to profile datasets and resolve data quality issues including nulls, duplicates, and type mismatches before they reached downstream systems.
+Worked with senior engineers and business analysts to gather data requirements and document pipeline logic for ongoing maintenance.
+TECHNICAL SKILLS
+Languages & ML Frameworks: Python, R, SQL, Scikit-learn, XGBoost, PyTorch, TensorFlow, Hugging Face Transformers
+NLP & AI: NLP (Named Entity Recognition, Text Classification, Information Extraction), Anomaly Detection, LangChain, RAG, OpenAI & Azure OpenAI APIs, Vector Databases (FAISS, Pinecone), Prompt Engineering
+MLOps: MLflow, Docker, Kubernetes, FastAPI, Airflow, CI/CD (GitHub Actions, GitLab), Model Monitoring, Feature Stores
+Cloud & Data: Azure (ML, Databricks, Data Factory, ADLS), AWS (SageMaker, S3, Glue, Lambda, EMR), Data Lakehouse (Delta Lake), PySpark, Kafka
+EDUCATION
+George Mason University, MS in Data Analytics Engineering	January 2023 - December 2024
+GMR Institute of Technology, BTech in Information Technology			  June 2016 – May 2020
+CERTIFICATIONS
+Databricks Certified Data Engineer Associate — June 2025
