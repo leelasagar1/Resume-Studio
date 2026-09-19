@@ -80,3 +80,26 @@ def test_user_demo_uploads():
         request = GenerateRequest(**text, confirmed=True)
         assert 'Walmart' in request.job_text
         assert len(request.resume_text) > 1000
+
+
+def test_luna_selection_updates_unpinned_repair_model(monkeypatch):
+    instances = []
+    class FakeOpenAI(DemoProvider):
+        def __init__(self):
+            super().__init__()
+            self.model = self.writer_model = self.reviewer_model = self.cheap_model = 'old-model'
+            instances.append(self)
+    monkeypatch.setitem(PROVIDERS, 'openai', FakeOpenAI)
+    monkeypatch.setenv('OPENAI_API_KEY', 'test')
+    monkeypatch.delenv('CHEAP_MODEL', raising=False)
+    with TestClient(app) as c:
+        response = c.post('/api/generate', headers=HEADERS, json={**PAYLOAD,
+            'provider': 'openai', 'model': 'gpt-5.6-luna'})
+        assert response.status_code == 202
+        assert instances[0].cheap_model == 'gpt-5.6-luna'
+        monkeypatch.setenv('CHEAP_MODEL', 'pinned-model')
+        response = c.post('/api/generate', headers=HEADERS, json={**PAYLOAD,
+            'provider': 'openai', 'reviewer_model': 'custom-reviewer'})
+        assert response.status_code == 202
+        assert instances[1].reviewer_model == 'custom-reviewer'
+        assert instances[1].cheap_model == 'old-model'

@@ -1,7 +1,7 @@
 # Resume Studio
 
-A local web app that rewrites your resume for a specific job description so that
-applicant tracking systems (ATS) score it highly, while every statement of fact
+A local web app that rewrites your resume for a specific job description to improve
+job-keyword coverage, while every statement of fact
 stays backed by your own resume text.
 
 A dozen small model calls do the writing; Python owns the parsing, scoring,
@@ -26,8 +26,8 @@ Needs Python 3.11 or newer and an OpenAI API key. Nothing else.
 ```
 
 After `setup`, open `.env` and paste your key into `OPENAI_API_KEY`. That is
-the only required edit; the defaults use `gpt-4.1-mini` and `gpt-4.1-nano`
-(about $0.02 per resume).
+the only required edit; the OpenAI defaults use `gpt-5.6-luna`. Runtime and
+cost depend on resume length, reasoning tokens and revision count.
 
 **Docker** (alternative, no Python install needed)
 
@@ -153,14 +153,44 @@ Typical live run with gpt-4.1-mini everywhere and gpt-4.1-nano for the
 repair/propose calls: 10-15 small calls, 45-80 seconds, about 50k input and
 8k output tokens, roughly $0.03. The run report shows the estimate.
 
-### Model settings for cheap runs
+### Model settings for GPT-5.6 Luna
 
 | variable | role | suggestion |
 | --- | --- | --- |
-| `OPENAI_MODEL` | keyword extraction from the job | `gpt-4.1-mini` (drives everything; do not go lower) |
-| `WRITER_MODEL` | per-role bullets, header | `gpt-4.1-mini` |
-| `REVIEWER_MODEL` | factual audit | `gpt-4.1-mini` (or `gpt-4.1` for a stricter audit) |
-| `CHEAP_MODEL` | repair and propose | `gpt-4.1-nano`; invalid output falls back to the writer |
+| `OPENAI_MODEL` | keyword extraction from the job | `gpt-5.6-luna` |
+| `WRITER_MODEL` | per-role bullets, header | blank: inherits extraction model |
+| `REVIEWER_MODEL` | factual audit | blank: inherits extraction model |
+| `CHEAP_MODEL` | repair and propose | blank: inherits writer; an explicit override is preserved |
+
+Luna uses `low` reasoning for extraction/writing/repair/proposals and `medium`
+for factual audits. Output limits include an additional 4,096 reasoning tokens
+(8,192 for audits); a token-truncated OpenAI response gets one retry with twice
+the output allowance, subject to the run budget. These are initial tuning
+choices, not measured guarantees of better quality. Strict JSON schemas,
+`store=False`, evidence checks and confirmation remain enabled.
+
+Existing installations: set `OPENAI_MODEL=gpt-5.6-luna`, clear the other three
+OpenAI model variables to inherit it, and restart the server. The browser
+remembers previous choices, so select `gpt-5.6-luna` in the model field too.
+OpenRouter and Claude defaults remain unchanged; selecting Luna through
+OpenRouter uses the Luna reasoning settings, subject to that provider's access.
+
+[Official Luna documentation](https://developers.openai.com/api/docs/models/gpt-5.6-luna)
+lists structured outputs and configurable reasoning. It describes Luna as a
+cost-sensitive model; benchmark factual quality instead of assuming a newer
+name guarantees better resumes. Estimates use standard uncached token prices;
+provider discounts, cache billing and long-context adjustments are not modeled.
+
+To compare both models on the **fictional built-in sample** (paid API calls):
+
+```bash
+python scripts/evaluate_models.py --live --repeats 3 > /tmp/resume-model-evaluation.json
+```
+
+This reports factual pass, evidence-only coverage, draft coverage, proposals,
+revisions, latency and usage. Model self-audit is not independent ground truth;
+review the text manually and add varied, human-labeled fixtures before treating
+this small benchmark as a quality decision. See [project review](PROJECT_REVIEW.md).
 
 OpenRouter and Claude have the same four slots with `OPENROUTER_` / `CLAUDE_`
 prefixes (`claude-haiku-4-5` is the cheap Claude choice). Prompt caching is enabled for the shared evidence block on the
@@ -254,7 +284,7 @@ python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-83 tests cover skeleton parsing, keyword matching, profile grounding, evidence enforcement,
+Offline tests cover skeleton parsing, keyword matching, profile grounding, evidence enforcement,
 entry integrity, bullet limits and standards, the targeted repair and propose
 calls, the revision loop,
 automatic stripping of unsupported statements, budget handling, the

@@ -842,12 +842,12 @@ def test_openai_adapter_contract_and_usage(monkeypatch):
 
     async def parse(**kwargs):
         captured.update(kwargs)
-        return SimpleNamespace(output_parsed=profile, usage=SimpleNamespace(total_tokens=321))
-    monkeypatch.setattr('app.agents.AsyncOpenAI', lambda **kwargs: SimpleNamespace(responses=SimpleNamespace(parse=parse)))
+        return SimpleNamespace(output_text=profile.model_dump_json(), status='completed', usage=SimpleNamespace(total_tokens=321))
+    monkeypatch.setattr('app.agents.AsyncOpenAI', lambda **kwargs: SimpleNamespace(responses=SimpleNamespace(create=parse)))
     monkeypatch.setenv('MAX_RUN_TOKENS', '60000')
     provider = OpenAIProvider()
     assert asyncio.run(provider.profile(SAMPLE_JOB)) == profile
-    assert captured['store'] is False and captured['text_format'] is JobProfile
+    assert captured['store'] is False and captured['text']['format']['name'] == 'JobProfile'
     assert provider.tokens == 321 and provider.calls == 1
 
 
@@ -858,17 +858,17 @@ def test_writer_runs_one_small_call_per_role_and_revises_only_flagged_roles(monk
 
     async def parse(**kwargs):
         calls.append(kwargs)
-        schema = kwargs['text_format']
+        schema = kwargs['text']['format']['name']
         body = json.loads(kwargs['input'][1]['content'])
-        if schema is EntryRewrite:
+        if schema == 'EntryRewrite':
             eid = body['role']['entry_id']
             parsed = EntryRewrite(bullets=[Claim(id=f'{eid}b1', text='Built SQL reports for weekly operations reviews used by regional operations managers.',
                                                  evidence_ids=[body['role']['source_bullets'][0]['eid']], proposed=False)])
         else:
             parsed = HeaderRewrite(headline='Data Analyst', summary=[Claim(id='s1', text='Data analyst with SQL reporting experience across two employers and weekly operations reviews for regional managers and stakeholders.', evidence_ids=['E3'], proposed=False)],
                                    skill_groups=[SkillGroup(label='Core', items=[SkillItem(text='SQL', evidence_ids=['E11'])])])
-        return SimpleNamespace(output_parsed=parsed, usage=SimpleNamespace(input_tokens=100, output_tokens=50))
-    monkeypatch.setattr('app.agents.AsyncOpenAI', lambda **kwargs: SimpleNamespace(responses=SimpleNamespace(parse=parse)))
+        return SimpleNamespace(output_text=parsed.model_dump_json(), status='completed', usage=SimpleNamespace(input_tokens=100, output_tokens=50))
+    monkeypatch.setattr('app.agents.AsyncOpenAI', lambda **kwargs: SimpleNamespace(responses=SimpleNamespace(create=parse)))
     monkeypatch.setenv('WRITER_MODEL', 'gpt-4.1-mini')
     provider = OpenAIProvider()
     evidence = make_evidence(SAMPLE_RESUME)
@@ -876,15 +876,15 @@ def test_writer_runs_one_small_call_per_role_and_revises_only_flagged_roles(monk
     status = {'matched': [], 'missing': []}
     rewrite = asyncio.run(provider.write(evidence, sample_profile(), status, skeleton_payload(skeleton)))
     assert len(calls) == 3, 'two roles with bullets + one header call'
-    assert {c['text_format'] for c in calls} == {EntryRewrite, HeaderRewrite}
-    entry_call = next(c for c in calls if c['text_format'] is EntryRewrite)
+    assert {c['text']['format']['name'] for c in calls} == {'EntryRewrite', 'HeaderRewrite'}
+    entry_call = next(c for c in calls if c['text']['format']['name'] == 'EntryRewrite')
     assert 'E12' not in entry_call['input'][0]['content'], 'role calls get only their own evidence slice (plus header lines)'
     assert provider.usage()['estimated_cost_usd'] > 0 and provider.usage()['input_tokens'] == 300
     draft = assemble(skeleton, rewrite, evidence)
     calls.clear()
     feedback = {'factual_issues': ['e2b1: overstated'], 'local_issues': [], 'missing_keywords': []}
     rewrite2 = asyncio.run(provider.write(evidence, sample_profile(), status, skeleton_payload(skeleton), draft, feedback))
-    assert len(calls) == 1 and calls[0]['text_format'] is EntryRewrite and json.loads(calls[0]['input'][1]['content'])['role']['entry_id'] == 'e2'
+    assert len(calls) == 1 and calls[0]['text']['format']['name'] == 'EntryRewrite' and json.loads(calls[0]['input'][1]['content'])['role']['entry_id'] == 'e2'
     assert [e.entry_id for e in rewrite2.entries] == ['e2', 'e4'] and rewrite2.headline == 'Data Analyst'
 
 
@@ -893,9 +893,9 @@ def test_audit_runs_in_parallel_chunks_with_rules_once(monkeypatch):
 
     async def parse(**kwargs):
         calls.append(kwargs['input'][1]['content'])
-        return SimpleNamespace(output_parsed=Audit(claim_checks=[], proposal_checks=[], eligibility=[], questions=['q']),
+        return SimpleNamespace(output_text=Audit(claim_checks=[], proposal_checks=[], eligibility=[], questions=['q']).model_dump_json(), status='completed',
                                usage=SimpleNamespace(total_tokens=1))
-    monkeypatch.setattr('app.agents.AsyncOpenAI', lambda **kwargs: SimpleNamespace(responses=SimpleNamespace(parse=parse)))
+    monkeypatch.setattr('app.agents.AsyncOpenAI', lambda **kwargs: SimpleNamespace(responses=SimpleNamespace(create=parse)))
     provider = OpenAIProvider()
     claims = [SimpleNamespace(model_dump=lambda i=i: {'id': f'c{i}'}) for i in range(45)]
     merged = asyncio.run(provider.audit({'E1': 'x'}, claims, [EligibilityRule(id='L1', text='r', kind='years')]))

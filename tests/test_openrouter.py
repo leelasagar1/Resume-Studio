@@ -67,6 +67,7 @@ def test_openrouter_allows_large_structured_resume_output(monkeypatch):
 
 @pytest.mark.parametrize('model,effort', [
     ('openai/gpt-5-nano', 'minimal'),
+    ('openai/gpt-5.6-luna', 'low'),
     ('xiaomi/mimo-v2.5', 'none'),
 ])
 def test_openrouter_controls_reasoning_for_structured_models(monkeypatch, model, effort):

@@ -112,7 +112,7 @@ async def config():
         provider, key_name = 'invalid', ''
     providers = []
     for name, label, model_key, fallback in [
-        ('openai', 'OpenAI', 'OPENAI_MODEL', 'gpt-4.1-mini'),
+        ('openai', 'OpenAI', 'OPENAI_MODEL', 'gpt-5.6-luna'),
         ('openrouter', 'OpenRouter', 'OPENROUTER_MODEL', 'openai/gpt-4.1-mini'),
         ('claude', 'Claude (Anthropic)', 'CLAUDE_MODEL', 'claude-sonnet-5')]:
         _, key = provider_settings(name)
@@ -211,6 +211,13 @@ def start(request, demo=False):
         provider.model = request.model
         provider.writer_model = request.writer_model or request.model
         provider.reviewer_model = request.reviewer_model or request.model
+    if not demo:
+        provider.writer_model = request.writer_model or provider.writer_model
+        provider.reviewer_model = request.reviewer_model or provider.reviewer_model
+        cheap_key = {'openai': 'CHEAP_MODEL', 'openrouter': 'OPENROUTER_CHEAP_MODEL',
+                     'claude': 'CLAUDE_CHEAP_MODEL'}[provider_name]
+        if not os.getenv(cheap_key):
+            provider.cheap_model = provider.writer_model
     key = secrets.token_urlsafe(24)
     job = {'id': key, 'status': 'queued', 'message': 'Starting your workflow',
            'progress': 3, 'created': time.time(), 'demo': demo,
