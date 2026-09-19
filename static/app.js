@@ -121,7 +121,9 @@ function renderResult(job) {
     const input = el('input'); input.type = 'checkbox'; input.value = proposal.id; input.checked = true;
     const body = el('span');
     body.append(el('strong', proposal.role_context), el('span', proposal.text));
-    if (proposal.terms.length) body.append(el('small', 'Covers: ' + proposal.terms.join(', ')));
+    if (proposal.terms.length) body.append(el('small', 'Adds the job skill' + (proposal.terms.length > 1 ? 's: ' : ': ') + proposal.terms.join(', ')));
+    if (proposal.fit_reason) body.append(el('small', 'Why this role: ' + proposal.fit_reason, 'fit-reason'));
+    if (proposal.review_note) body.append(el('small', 'Reviewer: ' + proposal.review_note, 'fit-reason'));
     label.append(input, body); bulletList.append(label);
   }
   $('bullets-title').hidden = !proposedIds.size;

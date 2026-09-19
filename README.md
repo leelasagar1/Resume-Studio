@@ -115,17 +115,31 @@ and `claude-sonnet-5`.
    (SageMaker, S3, Glue)"), and at most 10 unverified job terms, required
    first. Soft skills and degree fields are reported separately and do not
    count toward the keyword score.
-4. **Propose** (1 small call when needed). Required keywords should show up
-   in experience bullets, not only in Skills. Python lists the required
-   keywords absent from all bullets; the model writes practical bullets for
-   them under the best-fitting role, weaving related keywords together. They
-   are inserted as **proposed** bullets: no numbers, at most two per role,
-   highlighted in the preview, and removed unless you confirm them.
+4. **Propose** (1 small call when needed). Job skills should show up in
+   experience bullets, not only in Skills. Python lists every job skill,
+   required and preferred, that appears in no bullet. The model receives a
+   profile of each role (company, title, period, and the technologies that
+   role already demonstrates) and writes a practical bullet for each gap
+   skill under the role where such work would naturally have happened: a
+   cloud tool with the role on that cloud, a modelling method with the
+   modelling role, governance with the role that owns pipelines. Each bullet
+   comes with a `fit_reason` saying why it is realistic there.
+   Python then rejects any proposal that names a tool which did not exist
+   during that employment period, whose rationale names a different employer,
+   that borrows another role's tools, that carries a number, or that adds no
+   missing skill at all. At most 3 per role and 10 per run.
+   Proposed bullets are highlighted in the preview and **deleted unless you
+   tick them** on the confirm screen. They are a prompt to remember work you
+   did but never wrote down, not a claim about you.
 5. **Audit** (1 call, chunked in parallel for long resumes). A second model
-   pass checks each reworded claim against its cited evidence, judges whether
-   each proposed bullet is plausible for that role and period (implausible
-   ones are dropped), judges the screening rules, and lists facts that would
-   help. Verbatim lines are not sent for audit.
+   pass checks each reworded claim against its cited evidence. It also judges
+   every proposed bullet on three separate verdicts: **practical** (ordinary
+   work for that company, team and title), **relevant** (matters for the
+   target job) and **period consistent** (those tools existed then). A
+   proposal survives only if all three hold; the reviewer's one-line reason
+   is shown next to it on the confirm screen. The audit also judges the
+   screening rules and lists facts that would help. Verbatim lines are not
+   sent for audit.
 6. **Revise** (up to 3 rounds, default 2). If the score is below target or the
    audit found an unsupported statement, the writer gets the exact missing
    keywords and factual issues back. If revisions run out, unsupported bullets
@@ -178,6 +192,10 @@ interview prediction.
   only if your evidence contains it (or an inflection or alias). Otherwise it
   can appear only in a proposed bullet or an unevidenced Skills item, both of
   which you confirm before download.
+- Proposed bullets are suggestions, never assertions. They exist because most
+  missing keywords are work people did and forgot to write down. Tick only
+  what you actually did and could discuss in an interview; everything you
+  leave unticked is deleted and the score is recomputed without it.
 - Every employer, degree and certification with dates in your source must
   appear in the draft, or the draft is rejected.
 - The audit model can still misjudge a paraphrase. Read the preview before
@@ -207,7 +225,7 @@ python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-75 tests cover skeleton parsing, keyword matching, profile grounding, evidence enforcement,
+81 tests cover skeleton parsing, keyword matching, profile grounding, evidence enforcement,
 entry integrity, bullet limits and standards, the targeted repair and propose
 calls, the revision loop,
 automatic stripping of unsupported statements, budget handling, the

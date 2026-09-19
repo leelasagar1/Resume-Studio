@@ -1,6 +1,6 @@
 """Fixed fictional fixture, explicitly labeled in the API and interface. No AI calls."""
 import asyncio
-from .models import Audit, ClaimCheck, EntryBullets, JobProfile, ProposedBullet, Proposals, Repair, Resume, Rewrite
+from .models import Audit, ClaimCheck, EntryBullets, JobProfile, ProposalCheck, ProposedBullet, Proposals, Repair, Resume, Rewrite
 
 SAMPLE_RESUME = '''Alex Morgan
 alex.morgan@example.com | 555-010-2000 | Boston, MA
@@ -107,17 +107,18 @@ class DemoProvider:
         await asyncio.sleep(self.delay)
         return Repair(claims=[c.model_copy(update={'text': c.text.lstrip('-–—•* ')}) for c in claims_to_fix])
 
-    async def propose(self, evidence, profile, resume, gaps):
+    async def propose(self, evidence, profile, resume, gaps, roles=None):
         await asyncio.sleep(self.delay)
         return Proposals(bullets=[ProposedBullet(entry_id=resume.sections[0].entries[0].heading.id, covers=gaps, context_evidence_ids=['E3', 'E5'],
-            text='Documented data quality checks for weekly Tableau dashboards so operations reviewers could trust each report.')])
+            text='Documented data quality checks for weekly Tableau dashboards so operations reviewers could trust each report.',
+            fit_reason='Harbor Analytics already owns the weekly operations reporting, so documenting its checks is routine.')])
 
     async def audit(self, evidence, claims_to_audit, eligibility_rules, proposed=()):
         await asyncio.sleep(self.delay)
         return Audit(claim_checks=[ClaimCheck(claim_id=c.id, supported=True, reason='Matches the fictional source fixture.')
                                    for c in claims_to_audit],
-                     proposal_checks=[ClaimCheck(claim_id=c.id, supported=True, reason='Plausible for the role; not evidence.')
-                                      for c in proposed],
+                     proposal_checks=[ProposalCheck(claim_id=c.id, practical=True, relevant=True, period_consistent=True,
+                                                    reason='Plausible for the role; not evidence.') for c in proposed],
                      eligibility=[], questions=['Have you used Docker or Airflow? Keep them only if you can discuss them.'])
 
     async def close(self):

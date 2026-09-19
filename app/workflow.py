@@ -269,6 +269,8 @@ def date_ranges(text):
 
 MAX_SKILLS_PER_GROUP = 8
 MAX_SKILL_GROUPS = 5
+MAX_PROPOSED_PER_ROLE = 3
+MAX_PROPOSED_TOTAL = 10
 MAX_UNVERIFIED_SKILLS = 10
 MAX_BULLETS = 7          # total per role, proposed bullets included
 MIN_BULLETS = 5          # evidence-backed bullets per role (or the source count if fewer)
@@ -283,6 +285,12 @@ PAST_TENSE = {'built', 'led', 'drove', 'ran', 'wrote', 'set', 'cut', 'won', 'gre
               'thrust', 'understood', 'upheld', 'wove', 'withdrew', 'forecast', 'cast', 'bid', 'bet', 'input', 'output'}
 BANNED_PHRASES = ['results-driven', 'results driven', 'responsible for', 'detail-oriented', 'team player',
                   'hard-working', 'go-getter', 'synergy', 'think outside the box', 'proven track record']
+# Sentence-initial verbs and connectives that are not technologies, so they are
+# never listed as a role's demonstrated stack.
+BULLET_VERBS = PAST_TENSE | WEAK_STARTS | {'designed', 'developed', 'implemented', 'created', 'automated', 'migrated',
+                                           'engineered', 'orchestrated', 'integrated', 'delivered', 'improved',
+                                           'partnered', 'collaborated', 'presented', 'tracked', 'analyzed', 'analysed',
+                                           'established', 'maintained', 'trained', 'validated', 'deployed', 'reduced'}
 
 SINGLE_DATE = re.compile(rf'(?:—|–|-|\||,|\()\s*({MONTH})\s*\)?\s*$', re.I)
 
@@ -609,9 +617,12 @@ def strip_unsupported(resume, unsupported_ids):
     return stripped
 
 
-def proposals(resume, evidence, profile):
-    """Proposed bullets with their role context and the unevidenced job keywords they carry."""
+def proposals(resume, evidence, profile, fit_reasons=None, review_notes=None):
+    """Proposed bullets with their role context, the job skills they add, why
+    the writer thinks they fit that company, and the reviewer's verdict."""
     normalized_evidence = normalize(' '.join(evidence.values()))
+    fit_reasons = fit_reasons or {}
+    review_notes = review_notes or {}
     result = []
     for section in resume.sections:
         for entry in section.entries:
@@ -622,6 +633,8 @@ def proposals(resume, evidence, profile):
                 terms = [k.term for k in profile.keywords
                          if keyword_hits(k, text) and not keyword_in_evidence(k, normalized_evidence)]
                 result.append({'id': bullet.id, 'text': bullet.text, 'terms': terms,
+                               'fit_reason': fit_reasons.get(bullet.id, ''),
+                               'review_note': review_notes.get(bullet.id, ''),
                                'role_context': entry.heading.text + (' | ' + entry.detail.text if entry.detail else '')})
     return result
 
@@ -638,6 +651,78 @@ def experience_text(resume):
     return '\n'.join(lines)
 
 
+# First year each tool was realistically in production use. A proposed bullet
+# naming a tool that did not exist during the role's period is rejected.
+TOOL_ERA = {
+    'hadoop': 2008, 'kafka': 2011, 'docker': 2013, 'spark': 2014, 'pyspark': 2014, 'terraform': 2014,
+    'snowflake': 2014, 'kubernetes': 2015, 'airflow': 2015, 'tensorflow': 2015, 'azure data factory': 2015,
+    'adf': 2015, 'databricks': 2015, 'pytorch': 2016, 'sagemaker': 2017, 'dbt': 2018, 'mlflow': 2018,
+    'fastapi': 2018, 'bert': 2018, 'delta lake': 2019, 'gpt 2': 2019, 'transformers': 2019,
+    'gpt 3': 2020, 'dagster': 2020, 'vertex ai': 2021, 'copilot': 2021, 'langchain': 2022,
+    'chatgpt': 2022, 'unity catalog': 2022, 'gpt 4': 2023, 'llama': 2023, 'fabric': 2023,
+    'agentic ai': 2023, 'llm as judge': 2023, 'rag': 2023, 'retrieval augmented generation': 2023,
+}
+
+
+def role_period(entry):
+    """(start, end) years for a role; end is the current year for 'Present'."""
+    from datetime import date
+    text = entry.heading.text + ' ' + (entry.detail.text if entry.detail else '')
+    years = [int(y) for y in re.findall(r'\b((?:19|20)\d{2})\b', text)]
+    if not years:
+        return None, None
+    end = date.today().year if re.search(r'present|current|now', text, re.I) else max(years)
+    return min(years), end
+
+
+def anachronistic(text, entry):
+    """Tools named in the text that did not exist during the role's period."""
+    _, end = role_period(entry)
+    if end is None:
+        return []
+    normalized = normalize(text)
+    return [tool for tool, year in TOOL_ERA.items()
+            if count_occurrences(tool, normalized) and year > end]
+
+
+def role_profiles(resume):
+    """What the propose call needs to place a skill in the right company:
+    title, period and the technologies that role already demonstrates."""
+    profiles = []
+    for section in resume.sections:
+        for entry in section.entries:
+            own = [b for b in entry.bullets if not b.proposed]
+            if not own:
+                continue
+            start, end = role_period(entry)
+            tech = []
+            for bullet in own:
+                for word in re.findall(r'[A-Za-z][A-Za-z0-9+#./-]+', bullet.text):
+                    cleaned = word.strip('.,;:()')
+                    if (len(cleaned) > 2 and any(c.isupper() for c in cleaned)
+                            and cleaned not in tech and cleaned.lower() not in BULLET_VERBS):
+                        tech.append(cleaned)
+            profiles.append({'entry_id': entry.heading.id, 'company_and_title': entry.heading.text,
+                             'period': entry.detail.text if entry.detail else '',
+                             'years': f'{start}-{end}' if start else '',
+                             'technologies_already_shown': tech[:18],
+                             'existing_bullets': [b.text for b in own]})
+    return profiles
+
+
+def skill_gaps(resume, profile):
+    """Every job skill, required or preferred, missing from the experience
+    bullets. Required first, so the per-role budget is spent on those."""
+    text = normalize(experience_text(resume))
+
+    def wanted(keyword):
+        return (keyword.kind in ('skill', 'tool', 'method', 'domain') and not CREDENTIAL.search(keyword.term)
+                and len(keyword.term.split()) <= 6 and not keyword_hits(keyword, text))
+
+    return ([k.term for k in profile.keywords if k.priority == 'required' and wanted(k)]
+            + [k.term for k in profile.keywords if k.priority == 'preferred' and wanted(k)])
+
+
 def bullet_gaps(resume, profile):
     """Required skill/tool/method/domain keywords that appear nowhere in the
     experience text. These must be reflected in bullets, not only in Skills."""
@@ -648,16 +733,18 @@ def bullet_gaps(resume, profile):
 
 
 async def add_proposed_bullets(provider, evidence, profile, draft, gaps):
-    """Ask for bullets covering the gap keywords and insert them as proposed
-    claims. Invalid bullets are dropped deterministically."""
+    """Ask for bullets covering the gap skills and insert them as proposed
+    claims. Invalid, anachronistic or misplaced bullets are dropped
+    deterministically. Returns (draft, added, fit_reasons)."""
+    fit_reasons = {}
     if not gaps or not hasattr(provider, 'propose'):
-        return draft, 0
+        return draft, 0, fit_reasons
     # Only roles that have bullets (jobs, projects) can host a proposed bullet;
     # never degrees or certifications.
     entries = {e.heading.id: e for s in draft.sections for e in s.entries if any(not b.proposed for b in e.bullets)}
     by_term = {normalize(k.term): k for k in profile.keywords}
     existing = {c.id for c in claims(draft)}
-    proposals = await provider.propose(evidence, profile, draft, gaps)
+    proposals = await provider.propose(evidence, profile, draft, gaps, role_profiles(draft))
     # Distinctive tokens (tools, products, acronyms) per role, from the role's own source lines.
     def distinctive(text):
         return {w.strip('(),.;:') for w in text.split()
@@ -674,11 +761,22 @@ async def add_proposed_bullets(provider, evidence, profile, draft, gaps):
     for bullet in proposals.bullets:
         entry = entries.get(bullet.entry_id)
         text = ' '.join(bullet.text.split()).lstrip('-–—•* ')
-        if entry is None or not text or re.search(r'\d', text) or per_entry.get(bullet.entry_id, 0) >= 2 or added >= 8:
+        if (entry is None or not text or re.search(r'\d', text)
+                or per_entry.get(bullet.entry_id, 0) >= MAX_PROPOSED_PER_ROLE or added >= MAX_PROPOSED_TOTAL):
             continue
         covered = [g for g in gaps if keyword_hits(by_term[normalize(g)], normalize(text))]
         probe = Claim(id='p', text=text, evidence_ids=['E1'], proposed=True)
         if not covered or bullet_standard_issues(probe):
+            continue
+        # A tool that did not exist while the candidate held that role.
+        if anachronistic(text, entry):
+            continue
+        # A rationale naming a different employer means the skill was placed in
+        # the wrong company; the whole bullet is untrustworthy.
+        reason_words = set((bullet.fit_reason or '').replace(',', ' ').split())
+        own_company = company_words(entry)
+        other_companies = set().union(*(company_words(e) for k, e in entries.items() if k != bullet.entry_id)) - own_company
+        if reason_words & other_companies:
             continue
         # A proposal that names tools from a different role's evidence but not this
         # role's is borrowed work (Prophet/LSTM from TCS placed under Con Edison).
@@ -695,8 +793,35 @@ async def add_proposed_bullets(provider, evidence, profile, draft, gaps):
         claim_id = f'{bullet.entry_id}p{number}'
         existing.add(claim_id)
         entry.bullets.append(Claim(id=claim_id, text=text, evidence_ids=context, proposed=True))
+        fit_reasons[claim_id] = ' '.join((bullet.fit_reason or '').split())[:200]
         added += 1
-    return draft, added
+    return draft, added, fit_reasons
+
+
+def company_words(entry):
+    """Capitalized words of a role heading that are not job titles: the company."""
+    titles = {'senior', 'junior', 'lead', 'principal', 'staff', 'associate', 'intern', 'engineer', 'scientist',
+              'analyst', 'developer', 'manager', 'consultant', 'specialist', 'data', 'machine', 'learning', 'ml', 'ai'}
+    return {w.strip('.,|-') for w in entry.heading.text.split()
+            if len(w.strip('.,|-')) > 2 and w[0].isupper() and w.strip('.,|-').lower() not in titles}
+
+
+def prune_pointless_proposals(resume, evidence, profile):
+    """A proposed bullet is unconfirmed content, so it must earn its place by
+    carrying at least one job skill the candidate's evidence lacks. Anything
+    else is filler and is removed before the candidate ever sees it."""
+    normalized_evidence = normalize(' '.join(evidence.values()))
+    pointless = set()
+    for section in resume.sections:
+        for entry in section.entries:
+            for bullet in entry.bullets:
+                if not bullet.proposed:
+                    continue
+                text = normalize(bullet.text)
+                if not any(keyword_hits(k, text) and not keyword_in_evidence(k, normalized_evidence)
+                           for k in profile.keywords if k.kind not in ('credential', 'soft')):
+                    pointless.add(bullet.id)
+    return drop_claims(resume, pointless), len(pointless)
 
 
 def drop_claims(resume, ids):
@@ -741,8 +866,10 @@ async def complete_audit(provider, evidence, draft, profile):
     expected = {c.id for c in targets}
     proposed = proposed_claims(draft)
     audit = await provider.audit(evidence, targets, profile.eligibility, proposed)
-    # Unreviewed or unsuitable proposals are dropped; they never reach the candidate.
-    suitable = {c.claim_id for c in audit.proposal_checks if c.supported}
+    # A proposal survives only if the reviewer finds it practical for that
+    # company and role, relevant to the job, and possible in that period.
+    suitable = {c.claim_id for c in audit.proposal_checks
+                if c.practical and c.relevant and c.period_consistent}
     rejected = [c.id for c in proposed if c.id not in suitable]
     drop_claims(draft, set(rejected))
     audit.proposal_checks = [c for c in audit.proposal_checks if c.claim_id in suitable]
@@ -778,6 +905,8 @@ async def run_workflow(request, provider, emit):
     previous = feedback = None
     history = []
     last_result = None
+    fit_reasons = {}
+    review_notes = {}
     rounds = request.max_revisions + 1
     stop_reason = 'Revision limit reached; the best factual version was kept.'
     try:
@@ -795,22 +924,31 @@ async def run_workflow(request, provider, emit):
                 await emit('writing', 'Repairing bullets that overstate your evidence', 15 + version * step + step // 3)
                 repaired = local
                 draft, local = await repair_locally(provider, evidence, profile, draft, local)
-            gaps = [] if local else bullet_gaps(draft, profile)
+            # Summary wording is polish: it drives another writing round but must
+            # never fail a run the way an unsupported claim does.
+            summary_ids = {c.id for c in draft.summary}
+            polish = [i for i in local if i.split(':', 1)[0] in summary_ids]
+            local = [i for i in local if i not in polish]
+            gaps = [] if local else skill_gaps(draft, profile)
             if gaps:
-                await emit('writing', 'Proposing bullets for required skills your resume does not mention',
+                await emit('writing', 'Drafting practical bullets for the job skills your resume does not mention',
                            15 + version * step + step // 3)
-                draft, _ = await add_proposed_bullets(provider, evidence, profile, draft, gaps)
+                draft, _, reasons = await add_proposed_bullets(provider, evidence, profile, draft, gaps)
+                fit_reasons.update(reasons)
+            draft, _ = prune_pointless_proposals(draft, evidence, profile)
             draft, trimmed = trim_bullets(draft, profile)
             ats = score_resume(profile, resume_plain_text(draft))
             status = keyword_status(ats, profile, evidence)
-            if local and version < rounds - 1:
+            if (local or polish) and version < rounds - 1:
                 # Cheap deterministic failure: rewrite before paying for an audit.
-                history.append({'version': version, 'score': ats['score'], 'factual_pass': False, 'audited': False,
-                                'issues': local[:6], 'repaired': repaired[:6]})
-                previous, feedback = draft, {'local_issues': local, 'missing_keywords': status['missing'], 'factual_issues': []}
+                history.append({'version': version, 'score': ats['score'], 'factual_pass': not local, 'audited': False,
+                                'issues': (local + polish)[:6], 'repaired': repaired[:6]})
+                previous, feedback = draft, {'local_issues': local + polish, 'missing_keywords': status['missing'],
+                                             'factual_issues': []}
                 continue
             await emit('reviewing', 'Auditing every claim against your evidence', 15 + version * step + step // 2)
             audit, rejected = await complete_audit(provider, evidence, draft, profile)
+            review_notes.update({c.claim_id: c.reason for c in audit.proposal_checks})
             ats = score_resume(profile, resume_plain_text(draft))
             status = keyword_status(ats, profile, evidence)
             result = evaluate(profile, draft, audit, local)
@@ -819,8 +957,8 @@ async def run_workflow(request, provider, emit):
             result['bullet_gaps'] = bullet_gaps(draft, profile)
             history.append({'version': version, 'score': result['score'], 'factual_pass': result['factual_pass'],
                             'audited': True, 'issues': result['factual_issues'][:6], 'repaired': repaired[:6],
-                            'bullet_gaps': result['bullet_gaps'], 'proposed': result['proposed_count'],
-                            'trimmed': trimmed, 'backfilled': backfilled})
+                            'polish': polish[:4], 'bullet_gaps': result['bullet_gaps'],
+                            'proposed': result['proposed_count'], 'trimmed': trimmed, 'backfilled': backfilled})
             candidate = (draft, result)
             if not result['factual_pass'] and not local:
                 stripped = strip_unsupported(draft, set(result['unsupported_ids']))
@@ -847,7 +985,7 @@ async def run_workflow(request, provider, emit):
                 break
             previous = draft
             feedback = {'missing_keywords': result['missing'], 'factual_issues': result['factual_issues'],
-                        'local_issues': local,
+                        'local_issues': local + polish,
                         'required_keywords_absent_from_experience_bullets': result['bullet_gaps']}
     except BudgetExceeded:
         if best is None:
@@ -866,7 +1004,7 @@ async def run_workflow(request, provider, emit):
               'usage': provider.usage() if hasattr(provider, 'usage') else {'calls': provider.calls, 'tokens': provider.tokens},
               'evidence': evidence}
     terms = unverified_terms(draft)
-    proposed = proposals(draft, evidence, profile)
+    proposed = proposals(draft, evidence, profile, fit_reasons, review_notes)
     if terms or proposed:
         from .confirmation import without_terms
         floor_draft = drop_claims(without_terms(draft, set(terms)), {p['id'] for p in proposed})

@@ -126,6 +126,9 @@ class ProposedBullet(StrictModel):
     text: str
     covers: list[str]
     context_evidence_ids: list[str]
+    # Why this work is practical for that company, role, seniority and period.
+    # Shown to the candidate so they can judge it before confirming.
+    fit_reason: str
 
 
 class Proposals(StrictModel):
@@ -146,11 +149,19 @@ class EligibilityCheck(StrictModel):
     reason: str
 
 
+class ProposalCheck(StrictModel):
+    """A proposed bullet is kept only when all three verdicts are true. None of
+    them is evidence that the candidate did the work."""
+    claim_id: str
+    practical: bool          # realistic work for that company, team and seniority
+    relevant: bool           # matters for the target job
+    period_consistent: bool  # the tools and practices existed during that employment
+    reason: str
+
+
 class Audit(StrictModel):
     claim_checks: list[ClaimCheck]
-    # supported here means: plausible for the cited role, company, seniority and
-    # period, relevant to the job, free of invented metrics. Not evidence.
-    proposal_checks: list[ClaimCheck]
+    proposal_checks: list[ProposalCheck]
     eligibility: list[EligibilityCheck]
     questions: list[str]
 

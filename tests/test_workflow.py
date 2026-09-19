@@ -7,9 +7,9 @@ from docx import Document
 from app.agents import BudgetExceeded, OpenAIProvider
 from app.demo import DemoProvider, SAMPLE_JOB, SAMPLE_RESUME, rewrite_of, sample_draft, sample_profile
 from app.documents import extract_text, render_docx, MAX_FILE
-from app.models import Audit, Claim, ClaimCheck, EligibilityCheck, EligibilityRule, GenerateRequest, JobProfile, Keyword, ProposedBullet, Proposals, Repair, Resume, SkillGroup, SkillItem, resume_plain_text
+from app.models import Audit, Claim, ClaimCheck, EligibilityCheck, EligibilityRule, GenerateRequest, JobProfile, Keyword, ProposalCheck, ProposedBullet, Proposals, Repair, Resume, SkillGroup, SkillItem, resume_plain_text
 from app.scoring import ground_profile, inflected_occurrences, keyword_in_evidence, normalize, score_resume
-from app.workflow import (add_proposed_bullets, bullet_gaps, claims_to_audit, make_evidence, normalize_skills, run_workflow,
+from app.workflow import (MAX_PROPOSED_PER_ROLE, add_proposed_bullets, bullet_gaps, claims_to_audit, make_evidence, normalize_skills, run_workflow,
                           strip_unsupported, unverified_terms, validate_draft)
 
 
@@ -276,46 +276,53 @@ def test_propose_step_targets_required_keywords_absent_from_experience():
     assert bullet_gaps(draft, profile) == ['dashboards', 'data quality']  # Docker is preferred; stakeholders is soft
 
     class Sloppy(ScriptedProvider):
-        async def propose(self, evidence, profile, resume, gaps):
+        async def propose(self, evidence, profile, resume, gaps, roles=None):
             return Proposals(bullets=[
                 ProposedBullet(entry_id='j1', covers=['dashboards'], context_evidence_ids=['E3'],
-                               text='Built 5 Tableau dashboards for operations.'),          # number: dropped
+                               text='Built 5 Tableau dashboards for operations.', fit_reason='Routine work for this team.'),          # number: dropped
                 ProposedBullet(entry_id='nope', covers=['dashboards'], context_evidence_ids=['E3'],
-                               text='Built dashboards.'),                                   # unknown entry: dropped
+                               text='Built dashboards.', fit_reason='Routine work for this team.'),                                   # unknown entry: dropped
                 ProposedBullet(entry_id='j2', covers=['data quality'], context_evidence_ids=['E99'],
-                               text='Introduced data quality checks on incoming customer datasets before analysis.'),
+                               text='Introduced data quality checks on incoming customer datasets before analysis.', fit_reason='Routine work for this team.'),
                 ProposedBullet(entry_id='j2', covers=['dashboards'], context_evidence_ids=['E8'],
-                               text='Maintained weekly operations dashboards for the intern reporting rotation across two regions.'),
+                               text='Maintained weekly operations dashboards for the intern reporting rotation across two regions.', fit_reason='Routine work for this team.'),
                 ProposedBullet(entry_id='j2', covers=['dashboards'], context_evidence_ids=['E8'],
-                               text='Refreshed dashboards each Monday for the whole operations team before reviews.')])  # third for j2: dropped
-    draft, added = asyncio.run(add_proposed_bullets(Sloppy(), evidence, profile, draft, bullet_gaps(draft, profile)))
-    assert added == 2 and bullet_gaps(draft, profile) == []
+                               text='Refreshed dashboards each Monday for the whole operations team before reviews.', fit_reason='Routine work for this team.'),
+                ProposedBullet(entry_id='j2', covers=['dashboards'], context_evidence_ids=['E8'],
+                               text='Published the operations dashboard pack to the shared drive before each weekly review.',
+                               fit_reason='Routine work for this team.')])  # fourth for j2: over the per-role cap
+    draft, added, _ = asyncio.run(add_proposed_bullets(Sloppy(), evidence, profile, draft, bullet_gaps(draft, profile)))
+    assert added == MAX_PROPOSED_PER_ROLE and bullet_gaps(draft, profile) == []
+    assert sum(b.proposed for b in draft.sections[0].entries[1].bullets) == MAX_PROPOSED_PER_ROLE
     assert sum(b.proposed for b in draft.sections[0].entries[0].bullets) == 1, 'j1 already had one writer proposal'
     sloppy_draft = draft
     full = sample_draft(1)
-    full.sections[0].entries[0].bullets.append(Claim(id='j1p2', text='Automated dashboards refresh jobs with Docker containers for the operations team.', evidence_ids=['E3'], proposed=True))
-    full, added = asyncio.run(add_proposed_bullets(ScriptedProvider(), evidence, profile, full, ['dashboards']))
-    assert added == 0, 'two proposed bullets already: cap reached'
+    for n in range(2):
+        full.sections[0].entries[0].bullets.append(
+            Claim(id=f'j1p{n + 2}', text=f'Automated dashboard refresh job number {n} with Docker for the operations team.',
+                  evidence_ids=['E3'], proposed=True))
+    full, added, _ = asyncio.run(add_proposed_bullets(ScriptedProvider(), evidence, profile, full, ['dashboards']))
+    assert added == 0, 'three proposed bullets already: per-role cap reached'
 
     class Misplaced(ScriptedProvider):
-        async def propose(self, evidence, profile, resume, gaps):
+        async def propose(self, evidence, profile, resume, gaps, roles=None):
             return Proposals(bullets=[ProposedBullet(entry_id='ed1', covers=gaps, context_evidence_ids=['E13'],
-                                                     text='Applied dashboards practices during coursework projects for the analytics program.')])
+                                                     text='Applied dashboards practices during coursework projects for the analytics program.', fit_reason='Routine work for this team.')])
     draft = sample_draft(1)
-    draft, added = asyncio.run(add_proposed_bullets(Misplaced(), evidence, profile, draft, ['dashboards']))
+    draft, added, _ = asyncio.run(add_proposed_bullets(Misplaced(), evidence, profile, draft, ['dashboards']))
     assert added == 0 and draft.sections[2].entries[0].bullets == [], 'never under a degree or certification'
 
     class Borrower(ScriptedProvider):
-        async def propose(self, evidence, profile, resume, gaps):
+        async def propose(self, evidence, profile, resume, gaps, roles=None):
             return Proposals(bullets=[ProposedBullet(entry_id='j1', covers=gaps, context_evidence_ids=['E3'],
-                                                     text='Cleaned dashboards data with Northstar Labs tooling and SQL validation for Lakeside University reviews.')])
+                                                     text='Cleaned dashboards data with Northstar Labs tooling and SQL validation for Lakeside University reviews.', fit_reason='Routine work for this team.')])
     draft = sample_draft(1)
     draft.sections[0].entries[0].bullets = [b for b in draft.sections[0].entries[0].bullets if not b.proposed]
-    draft, added = asyncio.run(add_proposed_bullets(Borrower(), evidence, profile, draft, ['dashboards']))
+    draft, added, _ = asyncio.run(add_proposed_bullets(Borrower(), evidence, profile, draft, ['dashboards']))
     assert added == 0, 'names Northstar Labs and Lakeside University, which belong to other entries'
 
     j2 = sloppy_draft.sections[0].entries[1].bullets
-    assert [b.id for b in j2] == ['j2b1', 'j2p1', 'j2p2'] and all(b.proposed for b in j2[1:])
+    assert [b.id for b in j2] == ['j2b1', 'j2p1', 'j2p2', 'j2p3'] and all(b.proposed for b in j2[1:])
     assert j2[1].evidence_ids == ['E8'], 'invalid context ids fall back to the entry heading evidence'
     assert validate_draft(draft, evidence, profile) == []
 
@@ -343,21 +350,114 @@ class ScriptedProvider(DemoProvider):
         self.write_calls.append({'status': keyword_status, 'feedback': feedback, 'skeleton': skeleton})
         return rewrite_of(self.drafts.pop(0) if self.drafts else sample_draft(1), skeleton)
 
-    async def propose(self, evidence, profile, resume, gaps):
+    async def propose(self, evidence, profile, resume, gaps, roles=None):
         self.propose_calls = getattr(self, 'propose_calls', 0) + 1
         first = resume.sections[0].entries[0].heading.id
         return Proposals(bullets=[ProposedBullet(entry_id=first, covers=gaps, context_evidence_ids=['E3'],
-                                                 text='Applied ' + ' and '.join(gaps) + ' practices in weekly reporting work.')])
+                                                 text='Applied ' + ' and '.join(gaps) + ' practices in weekly reporting work.', fit_reason='Routine work for this team.')])
 
     async def audit(self, evidence, claims_to_audit, eligibility_rules, proposed=()):
         self.audit_calls += 1
         verdict = self.audits.pop(0) if self.audits else {}
         return Audit(claim_checks=[ClaimCheck(claim_id=c.id, supported=verdict.get(c.id, True), reason='scripted')
                                    for c in claims_to_audit],
-                     proposal_checks=[ClaimCheck(claim_id=c.id, supported=verdict.get(c.id, True), reason='scripted')
+                     proposal_checks=[ProposalCheck(claim_id=c.id, practical=verdict.get(c.id, True), relevant=True, period_consistent=True, reason='scripted')
                                       for c in proposed],
                      eligibility=[EligibilityCheck(rule_id=r.id, status='unknown', reason='scripted') for r in eligibility_rules],
                      questions=[])
+
+
+def test_proposals_cover_preferred_skills_and_see_each_role_stack():
+    from app.workflow import role_profiles, skill_gaps
+    evidence = make_evidence(SAMPLE_RESUME)
+    profile = sample_profile()
+    draft = sample_draft(1)
+    draft.sections[0].entries[0].bullets = [b for b in draft.sections[0].entries[0].bullets if not b.proposed]
+    # required (dashboards, data quality) first, then preferred (Docker, Airflow)
+    assert skill_gaps(draft, profile) == ['dashboards', 'data quality', 'Docker', 'Airflow']
+    seen = {}
+
+    class Recorder(ScriptedProvider):
+        async def propose(self, evidence, profile, resume, gaps, roles=None):
+            seen['gaps'], seen['roles'] = gaps, roles
+            return Proposals(bullets=[])
+    asyncio.run(add_proposed_bullets(Recorder(), evidence, profile, draft, skill_gaps(draft, profile)))
+    assert 'Airflow' in seen['gaps'], 'preferred skills get a bullet too'
+    harbor = next(r for r in seen['roles'] if r['company_and_title'].startswith('Data Analyst | Harbor'))
+    assert harbor['period'] == '2022 - Present' and harbor['years'].startswith('2022-')
+    assert 'SQL' in harbor['technologies_already_shown'] and 'Python' in harbor['technologies_already_shown']
+    assert 'Built' not in harbor['technologies_already_shown'], 'verbs are not technologies'
+    assert [r['entry_id'] for r in seen['roles']] == ['j1', 'j2'], 'only roles with real bullets host proposals'
+
+
+def test_anachronistic_and_unreviewed_proposals_are_rejected():
+    from app.workflow import anachronistic, role_period
+    evidence = make_evidence(SAMPLE_RESUME)
+    profile = sample_profile()
+    draft = sample_draft(1)
+    intern = draft.sections[0].entries[1]          # Northstar Labs, 2021 - 2022
+    assert role_period(intern) == (2021, 2022)
+    assert anachronistic('Built dashboards with LangChain and GPT-4 for the reporting team.', intern) == ['gpt 4']
+    assert anachronistic('Built dashboards with SQL and Airflow for the reporting team.', intern) == []
+    # A tool released in the role's final year is allowed; only later ones are not.
+    assert anachronistic('Used LangChain to summarize customer datasets for the team.', intern) == []
+
+    class TooNew(ScriptedProvider):
+        async def propose(self, evidence, profile, resume, gaps, roles=None):
+            return Proposals(bullets=[ProposedBullet(entry_id='j2', covers=['dashboards'], context_evidence_ids=['E8'],
+                                                     text='Built GPT-4 powered dashboards for the intern reporting rotation each week.',
+                                                     fit_reason='Reporting work.')])
+    draft, added, reasons = asyncio.run(add_proposed_bullets(TooNew(), evidence, profile, draft, ['dashboards']))
+    assert added == 0 and reasons == {}, 'GPT-4 did not exist during a 2021-2022 role'
+
+
+def test_proposal_in_the_wrong_company_and_filler_proposals_are_removed():
+    from app.workflow import company_words, prune_pointless_proposals
+    evidence = make_evidence(SAMPLE_RESUME)
+    profile = sample_profile()
+    assert company_words(sample_draft(1).sections[0].entries[1]) == {'Northstar', 'Labs'}
+
+    class WrongCompany(ScriptedProvider):
+        async def propose(self, evidence, profile, resume, gaps, roles=None):
+            return Proposals(bullets=[ProposedBullet(entry_id='j1', covers=['dashboards'], context_evidence_ids=['E3'],
+                                                     text='Maintained weekly operations dashboards for the regional review meetings.',
+                                                     fit_reason='Northstar Labs owns the reporting rotation, so dashboards are routine there.')])
+    draft = sample_draft(1)
+    draft, added, _ = asyncio.run(add_proposed_bullets(WrongCompany(), evidence, profile, draft, ['dashboards']))
+    assert added == 0, 'the rationale names another employer, so the placement is wrong'
+
+    draft = sample_draft(1)
+    entry = draft.sections[0].entries[0]
+    entry.bullets.append(Claim(id='j1p9', text='Collaborated with cross-functional stakeholders to align reporting priorities each quarter.',
+                               evidence_ids=['E3'], proposed=True))
+    draft, removed = prune_pointless_proposals(draft, evidence, profile)
+    ids = [b.id for b in draft.sections[0].entries[0].bullets]
+    assert removed == 1 and 'j1p9' not in ids, 'an unconfirmed bullet that adds no missing skill is filler'
+    assert 'j1p1' in ids, 'the Docker proposal still earns its place'
+
+
+@pytest.mark.parametrize('verdict', [
+    {'practical': False, 'relevant': True, 'period_consistent': True},
+    {'practical': True, 'relevant': False, 'period_consistent': True},
+    {'practical': True, 'relevant': True, 'period_consistent': False},
+])
+def test_reviewer_rejects_a_proposal_that_fails_any_single_check(verdict):
+    class Picky(ScriptedProvider):
+        async def audit(self, evidence, claims_to_audit, eligibility_rules, proposed=()):
+            self.audit_calls += 1
+            return Audit(claim_checks=[ClaimCheck(claim_id=c.id, supported=True, reason='ok') for c in claims_to_audit],
+                         proposal_checks=[ProposalCheck(claim_id=c.id, reason='judged', **verdict) for c in proposed],
+                         eligibility=[], questions=[])
+    result = asyncio.run(run_workflow(request(max_revisions=0), Picky(), silent))
+    assert result['proposals'] == [] and result['report']['proposed_count'] == 0
+    assert 'Applied' not in resume_plain_text(Resume.model_validate(result['resume']))
+
+
+class NoProposals(ScriptedProvider):
+    """For tests about draft selection, stopping and budget, where added
+    bullets would change the score under test."""
+    async def propose(self, evidence, profile, resume, gaps, roles=None):
+        return Proposals(bullets=[])
 
 
 def test_workflow_reaches_target_and_asks_to_confirm_unevidenced_skills():
@@ -369,7 +469,9 @@ def test_workflow_reaches_target_and_asks_to_confirm_unevidenced_skills():
     assert result['floor_score'] < result['report']['score']
     assert result['docx'] is None and '_pending' in result
     assert [p['id'] for p in result['proposals']] == ['j1p1', 'e2p2'] and result['proposals'][0]['terms'] == ['Docker']
-    assert set(result['proposals'][1]['terms']) == {'dashboards', 'data quality'}
+    # Preferred skills are covered too, not just required ones: Airflow rides along.
+    assert set(result['proposals'][1]['terms']) == {'dashboards', 'data quality', 'Airflow'}
+    assert result['proposals'][1]['fit_reason'] and result['proposals'][1]['review_note'] == 'scripted'
     assert result['proposals'][0]['role_context'].startswith('Data Analyst | Harbor Analytics')
     assert result['history'][0]['bullet_gaps'] == [] and result['history'][0]['proposed'] == 2
     assert 'Target ATS score reached' in result['stop_reason']
@@ -380,7 +482,7 @@ def test_workflow_reaches_target_and_asks_to_confirm_unevidenced_skills():
 def test_writer_receives_missing_keywords_and_factual_issues_on_revision():
     weak = sample_draft(0)
     weak.sections[1].skill_groups = [weak.sections[1].skill_groups[0]]  # no unevidenced additions
-    provider = ScriptedProvider(drafts=[weak, sample_draft(1)], audits=[{'s1': False}, {}])
+    provider = NoProposals(drafts=[weak, sample_draft(1)], audits=[{'s1': False}, {}])
     result = asyncio.run(run_workflow(request(max_revisions=1), provider, silent))
     feedback = provider.write_calls[1]['feedback']
     assert {m['term'] for m in feedback['missing_keywords']} >= {'Airflow'}
@@ -611,7 +713,7 @@ def test_best_version_is_kept_when_a_revision_regresses():
     worse.summary[0].text = 'Data analyst.'
     first = sample_draft(0)
     first.sections[1].skill_groups[1].items.pop()  # Airflow missing: below the 100 target
-    provider = ScriptedProvider(drafts=[first, worse])
+    provider = NoProposals(drafts=[first, worse])
     result = asyncio.run(run_workflow(request(max_revisions=1, target_score=100), provider, silent))
     assert result['selected_version'] == 0
     assert result['history'][1]['score'] < result['history'][0]['score']
@@ -620,13 +722,13 @@ def test_best_version_is_kept_when_a_revision_regresses():
 def test_stops_when_a_revision_barely_moves_the_score():
     first = sample_draft(0)
     first.sections[1].skill_groups[1].items.pop()  # Airflow missing: 92.5, below the 100 target
-    provider = ScriptedProvider(drafts=[first, first.model_copy(deep=True), sample_draft(1)])
+    provider = NoProposals(drafts=[first, first.model_copy(deep=True), sample_draft(1)])
     result = asyncio.run(run_workflow(request(max_revisions=2, target_score=100), provider, silent))
     assert len(result['history']) == 2 and 'would not raise the score' in result['stop_reason']
 
 
 def test_budget_keeps_only_audited_version():
-    class Budgeted(ScriptedProvider):
+    class Budgeted(NoProposals):
         async def write(self, *args, **kwargs):
             if self.write_calls:
                 raise BudgetExceeded('budget')
@@ -644,7 +746,7 @@ def test_missed_audit_claims_are_retried_then_treated_conservatively():
             self.audit_calls += 1
             return Audit(claim_checks=[ClaimCheck(claim_id=c.id, supported=True, reason='ok')
                                        for c in claims_to_audit if c.id != 's1'],
-                         proposal_checks=[ClaimCheck(claim_id=c.id, supported=True, reason='ok') for c in proposed],
+                         proposal_checks=[ProposalCheck(claim_id=c.id, practical=True, relevant=True, period_consistent=True, reason='ok') for c in proposed],
                          eligibility=[], questions=[])
     provider = Forgetful(drafts=[sample_draft(1)])
     result = asyncio.run(run_workflow(request(max_revisions=0), provider, silent))
