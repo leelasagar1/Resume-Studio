@@ -100,6 +100,11 @@ function renderResult(job) {
   comparison.append(el('p', `Before: ${data.before.score}/100 (${data.before.matched} of ${data.before.total} keywords) · After: ${report.score}/100 (${req.matched + pref.matched} of ${req.total + pref.total} keywords)`));
   if (pending) comparison.append(el('p', `With every item below confirmed: ${report.score}/100 · with all of them removed: ${data.floor_score}/100.`));
   $('stop-reason').textContent = data.stop_reason + (!report.eligible ? ' An explicit eligibility rule is unmet or unknown; see the report.' : '');
+  const style = $('source-style'); style.replaceChildren();
+  if (data.source_style && data.source_style.reads_machine_written) {
+    style.append(el('strong', 'Your source resume reads as AI-written. '), el('span', data.source_style.advice));
+    style.hidden = false;
+  } else { style.hidden = true; }
   $('download').href = `/api/jobs/${job.id}/download`;
   $('download').setAttribute('download', job.demo ? 'example-resume.docx' : 'tailored-resume.docx');
   $('download').hidden = pending;

@@ -1,4 +1,5 @@
 import re
+from difflib import SequenceMatcher
 from .agents import BudgetExceeded
 from .documents import render_docx
 from .models import Audit, Claim, ClaimCheck, Resume, claims, proposed_claims, skill_items, resume_plain_text
@@ -427,10 +428,11 @@ def bullet_standard_issues(bullet):
     text = bullet.text.strip()
     words = text.split()
     issues = []
-    if len(words) < 10:
-        issues.append(f'{bullet.id}: too short ({len(words)} words); write 15-25 words with method and result.')
-    elif len(words) > 30:
-        issues.append(f'{bullet.id}: too long ({len(words)} words); keep one idea in 15-25 words.')
+    # A deliberately short bullet is good writing; only a fragment is not.
+    if len(words) < 6:
+        issues.append(f'{bullet.id}: too short ({len(words)} words); name the work and its result.')
+    elif len(words) > 38:
+        issues.append(f'{bullet.id}: too long ({len(words)} words); keep one idea per bullet.')
     first = re.sub(r'[^a-z]', '', words[0].lower()) if words else ''
     if first in WEAK_STARTS:
         issues.append(f'{bullet.id}: start with a direct past-tense action verb, not "{words[0]}".')
@@ -525,8 +527,6 @@ def validate_draft(resume, evidence, profile):
             for bullet in entry.bullets:
                 if re.match(r'^\s*[-–—•*]', bullet.text):
                     issues.append(f'{bullet.id}: remove the leading bullet marker; Word supplies bullets.')
-                else:
-                    issues.extend(bullet_standard_issues(bullet))
             keys = entry_keys(entry.heading.text + ' ' + (entry.detail.text if entry.detail else ''))
             available = max((source_counts.get(k, 0) for k in keys), default=0)
             required = min(MIN_BULLETS, available)
@@ -798,6 +798,117 @@ async def add_proposed_bullets(provider, evidence, profile, draft, gaps):
     return draft, added, fit_reasons
 
 
+AI_TELLS = ['leveraged', 'leveraging', 'leverage ', 'utilized', 'utilizing', 'utilising', 'utilise', 'spearheaded', 'robust', 'seamless',
+            'seamlessly', 'comprehensive', 'cutting-edge', 'state-of-the-art', 'best-in-class', 'world-class',
+            'transformative', 'innovative solutions', 'meticulous', 'pivotal', 'holistic', 'synergy', 'synergies',
+            'delve', 'underscore', 'tapestry', 'in order to', 'a testament to', 'plays a key role',
+            'designed to ensure', 'to drive', 'drive impactful', 'wide range of', 'various stakeholders']
+GERUND_TAIL = re.compile(r',\s+\w+ing\b[^,]*\.?\s*$')
+MAX_SAME_OPENER = 2
+
+
+def restore_source_wording(resume, evidence, profile):
+    """Put the candidate's own sentence back whenever the rewrite added no job
+    keyword to it. Their prose is genuinely human: it varies in length, carries
+    odd specifics, and cannot read as generated. Rewrites are kept only where
+    they actually earn something."""
+    scorable = [k for k in profile.keywords if k.kind not in ('credential', 'soft')]
+    restored, used = 0, set()
+    for section in resume.sections:
+        for entry in section.entries:
+            for bullet in entry.bullets:
+                if bullet.proposed:
+                    continue
+                current = normalize(bullet.text)
+                gained = {k.term for k in scorable if keyword_hits(k, current)}
+                best = None
+                for eid in bullet.evidence_ids:
+                    line = evidence.get(eid, '')
+                    if eid in used or len(line.split()) < 6 or re.match(r'^\s*[-–—•*]', line):
+                        continue
+                    source = normalize(line)
+                    # The source must already carry every job keyword the
+                    # rewrite carries, or the rewrite is doing real work.
+                    if gained - {k.term for k in scorable if keyword_hits(k, source)}:
+                        continue
+                    # Token-level: character overlap calls unrelated sentences similar.
+                    score = SequenceMatcher(None, current.split(), source.split()).ratio()
+                    if best is None or score > best[0]:
+                        best = (score, eid, ' '.join(line.split()))
+                if best and best[0] >= 0.5 and len(best[2].split()) <= 38 and normalize(best[2]) != current:
+                    bullet.text = best[2].rstrip('.') + '.'
+                    used.add(best[1])
+                    restored += 1
+    return resume, restored
+
+
+def source_style_report(evidence):
+    """Measure the candidate's own resume the way a detector would. If the
+    source is already machine-written, no downstream rewriting can make the
+    result read as human, and the candidate needs to know that."""
+    import statistics
+    from collections import Counter
+    lines = [' '.join(v.split()) for v in evidence.values() if len(v.split()) >= 8]
+    if len(lines) < 5:
+        return None
+    lengths = [len(l.split()) for l in lines]
+    tails = [l for l in lines if GERUND_TAIL.search(l)]
+    openers = Counter(l.split()[0].lower() for l in lines)
+    top, repeats = openers.most_common(1)[0]
+    tail_share = round(100 * len(tails) / len(lines))
+    machine_like = tail_share >= 35 or statistics.pstdev(lengths) < 4
+    return {'sentences': len(lines), 'length_stdev': round(statistics.pstdev(lengths), 1),
+            'gerund_tail_percent': tail_share, 'most_repeated_opener': top, 'opener_repeats': repeats,
+            'reads_machine_written': machine_like,
+            'advice': ('Your source resume itself shows the patterns AI detectors key on '
+                       f'({tail_share}% of its sentences end in a ", ...ing ..." clause and "{top}" opens {repeats}). '
+                       'This app keeps your wording wherever it can, so those patterns carry through. '
+                       'Rewriting those source bullets in your own voice is the single biggest change you can make.')
+            if machine_like else 'Your source resume reads as human-written.'}
+
+
+def style_issues(resume, source_lines=frozenset()):
+    """Detectors key on uniformity, so uniformity is a defect. Human resumes
+    vary bullet length and shape; generated ones settle into one rhythm and
+    lean on the same trailing ", ...ing ..." clause. These checks push a draft
+    back to the writer until it reads like a person wrote it."""
+    import statistics
+    from collections import Counter
+    everything = [b for section in resume.sections for entry in section.entries for b in entry.bullets]
+    # A bullet that is the candidate's own sentence is exempt: rewriting their
+    # words to satisfy a style rule would defeat the point of keeping them.
+    bullets = [b for b in everything if normalize(b.text) not in source_lines]
+    issues = []
+    if not bullets:
+        return issues
+    for bullet in bullets:
+        # Length, opening verb and cliches: wording, never a question of honesty.
+        issues.extend(bullet_standard_issues(bullet))
+    for bullet in bullets:
+        lowered = bullet.text.lower()
+        tell = next((phrase for phrase in AI_TELLS if phrase in lowered), None)
+        if tell:
+            issues.append(f'{bullet.id}: replace "{tell}" with the plain word a person would use.')
+    # The trailing ", enabling/supporting/improving ..." clause is the loudest
+    # generated-text signature; allow it in a minority of bullets only.
+    tails = [b for b in bullets if GERUND_TAIL.search(b.text)]
+    allowed = max(1, len(bullets) // 5)
+    for bullet in tails[allowed:]:
+        issues.append(f'{bullet.id}: end on the result itself instead of a ", ...ing ..." clause; '
+                      'too many bullets share that shape.')
+    openers = Counter(b.text.split()[0].lower() for b in bullets if b.text.split())
+    for bullet in bullets:
+        first = bullet.text.split()[0] if bullet.text.split() else ''
+        if first and openers[first.lower()] > MAX_SAME_OPENER:
+            openers[first.lower()] -= 1
+            issues.append(f'{bullet.id}: "{first}" opens too many bullets; start this one with a different verb.')
+    lengths = [len(b.text.split()) for b in bullets]
+    if len(bullets) >= 6 and (statistics.pstdev(lengths) < 3.5 or max(lengths) - min(lengths) < 10):
+        issues.append(f'{bullets[0].id}: every bullet is {min(lengths)}-{max(lengths)} words, which reads as generated; '
+                      'vary the lengths deliberately, some 10-14 words and some 24-30.')
+    return issues
+
+
 def company_words(entry):
     """Capitalized words of a role heading that are not job titles: the company."""
     titles = {'senior', 'junior', 'lead', 'principal', 'staff', 'associate', 'intern', 'engineer', 'scientist',
@@ -919,13 +1030,16 @@ async def run_workflow(request, provider, emit):
             draft, backfilled = backfill_bullets(draft, evidence, profile)
             draft = tidy_layout(draft)
             local = validate_draft(draft, evidence, profile)
+            source_lines = {normalize(v) for v in evidence.values()}
+            style = style_issues(draft, source_lines)
             repaired = []
-            if local:
-                await emit('writing', 'Repairing bullets that overstate your evidence', 15 + version * step + step // 3)
-                repaired = local
-                draft, local = await repair_locally(provider, evidence, profile, draft, local)
-            # Summary wording is polish: it drives another writing round but must
-            # never fail a run the way an unsupported claim does.
+            if local or style:
+                await emit('writing', 'Repairing bullets that overstate your evidence or read as generated',
+                           15 + version * step + step // 3)
+                repaired = local + style
+                draft, local = await repair_locally(provider, evidence, profile, draft, local + style)
+            # Wording is polish: it drives another writing round but must never
+            # fail a run the way an unsupported claim does.
             summary_ids = {c.id for c in draft.summary}
             polish = [i for i in local if i.split(':', 1)[0] in summary_ids]
             local = [i for i in local if i not in polish]
@@ -937,9 +1051,18 @@ async def run_workflow(request, provider, emit):
                 fit_reasons.update(reasons)
             draft, _ = prune_pointless_proposals(draft, evidence, profile)
             draft, trimmed = trim_bullets(draft, profile)
+            draft, restored = restore_source_wording(draft, evidence, profile)
+            # Measure the final bullet set, proposals included, and give it one
+            # cheap pass to break up any remaining uniformity.
+            remaining_style = style_issues(draft, source_lines)
+            if remaining_style:
+                await emit('writing', 'Varying the wording so the resume reads as human-written',
+                           15 + version * step + step // 2)
+                draft, _ = await repair_locally(provider, evidence, profile, draft, remaining_style)
+            polish += style_issues(draft, source_lines)
             ats = score_resume(profile, resume_plain_text(draft))
             status = keyword_status(ats, profile, evidence)
-            if (local or polish) and version < rounds - 1:
+            if local and version < rounds - 1:
                 # Cheap deterministic failure: rewrite before paying for an audit.
                 history.append({'version': version, 'score': ats['score'], 'factual_pass': not local, 'audited': False,
                                 'issues': (local + polish)[:6], 'repaired': repaired[:6]})
@@ -958,7 +1081,8 @@ async def run_workflow(request, provider, emit):
             history.append({'version': version, 'score': result['score'], 'factual_pass': result['factual_pass'],
                             'audited': True, 'issues': result['factual_issues'][:6], 'repaired': repaired[:6],
                             'polish': polish[:4], 'bullet_gaps': result['bullet_gaps'],
-                            'proposed': result['proposed_count'], 'trimmed': trimmed, 'backfilled': backfilled})
+                            'proposed': result['proposed_count'], 'trimmed': trimmed, 'backfilled': backfilled,
+                            'source_wording_restored': restored})
             candidate = (draft, result)
             if not result['factual_pass'] and not local:
                 stripped = strip_unsupported(draft, set(result['unsupported_ids']))
@@ -1002,7 +1126,7 @@ async def run_workflow(request, provider, emit):
               'before': {'score': before['score'], 'components': before['components'],
                          'matched': len(before['keywords']) - len(before['missing']), 'total': len(before['keywords'])},
               'usage': provider.usage() if hasattr(provider, 'usage') else {'calls': provider.calls, 'tokens': provider.tokens},
-              'evidence': evidence}
+              'source_style': source_style_report(evidence), 'evidence': evidence}
     terms = unverified_terms(draft)
     proposed = proposals(draft, evidence, profile, fit_reasons, review_notes)
     if terms or proposed:

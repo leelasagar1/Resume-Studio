@@ -41,14 +41,34 @@ responsibilities (up to 15): short phrases describing the work, for the writer.
 '''
 
 STYLE = '''Bullet standard: start with a capitalized past-tense action verb (Built,
-Designed, Led, Reduced), then the method or technology, then the result.
-15-25 words, one clear idea, no first person, no "responsible for" or similar
-filler, no cliches such as "results-driven", no leading dash or bullet
-characters, no verification notes. Use the job's exact terminology wherever the
-evidence describes the same thing (evidence "PySpark" -> "Spark (PySpark)";
-"trained and validated a supervised model" -> "developed, validated and
-deployed a machine learning model"). Numbers only when the same number appears
-in the evidence for that same work; never invent or move a metric.
+Designed, Led, Reduced), then the method or technology, then the result. One
+clear idea, no first person, no "responsible for" or similar filler, no
+leading dash or bullet characters, no verification notes. Use the job's exact
+terminology wherever the evidence describes the same thing (evidence "PySpark"
+-> "Spark (PySpark)"; "trained and validated a supervised model" ->
+"developed, validated and deployed a machine learning model"). Numbers only
+when the same number appears in the evidence for that same work; never invent
+or move a metric.
+
+Write like the person, not like a model. Machine-written resumes are easy to
+spot because every bullet is the same length and the same shape. Yours must
+not be:
+- Vary the length on purpose. Across a role, some bullets should run 10-14
+  words and others 24-30. Never make them all mid-length.
+- Vary the shape. Do not end bullet after bullet with a trailing ", ...ing ..."
+  clause ("..., enabling faster reviews", "..., supporting model training").
+  At most one bullet per role may end that way; the rest should stop on the
+  result itself, or put the purpose up front ("For the weekly close, rebuilt
+  ...").
+- Vary the verbs. No verb may open more than two bullets in the whole resume.
+- Keep the candidate's concrete specifics: system names, team names, file
+  types, cadences ("nightly", "each Monday"), domain nouns. Specific detail is
+  what makes writing read as human; generic competence reads as generated.
+- Never use: leveraged, utilized, spearheaded, robust, seamless, comprehensive,
+  cutting-edge, state-of-the-art, best-in-class, world-class, transformative,
+  innovative solutions, meticulous, pivotal, crucial, holistic, synergy,
+  delve, underscore, tapestry, realm, "in order to", "a testament to",
+  "plays a key role in", "designed to ensure".
 '''
 
 ENTRY_PROMPT = RULES + STYLE + '''You rewrite the bullets of ONE role of the candidate's resume for the
@@ -57,6 +77,12 @@ heading, dates and original bullets, plus the candidate's summary and skills
 lines), the role (entry_id, heading, detail, source_bullets), the job (title,
 keywords, responsibilities) and keyword_status: which job keywords are still
 missing and, for each, whether it is in_candidate_evidence.
+
+Start from the candidate's own sentences. They already sound like a person, so
+keep their wording wherever it works and change only what has to change: the
+job's terminology, a weak opening verb, a bullet that is irrelevant to this
+job. A source bullet that is already relevant and well written should come
+through almost untouched. Do not paraphrase for the sake of paraphrasing.
 
 Return 5 to 6 bullets for this role (all of them if the role has fewer than 5
 source bullets), most relevant to the job first. Each bullet cites the E ids
@@ -125,8 +151,12 @@ candidate's evidence does not contain, remove any number absent from the
 evidence, drop leading bullet markers, and cite E ids that fully entail the
 new text. Alternatively, if the bullet mainly exists to cover missing job
 keywords, keep it and set proposed=true with role-context E ids and no numbers.
-Keep the same claim ids, keep every fact the evidence supports, keep the
-action-verb style and 15-25 words. Return exactly one claim per listed id.
+Keep the same claim ids and every fact the evidence supports. Some issues are
+about wording rather than facts: an overused opening verb, a banned word, or
+too many bullets ending in a trailing ", ...ing ..." clause. Fix those by
+rewriting the sentence's shape, not by adding or removing facts, and change
+the length while you are there so the bullets stop looking uniform: a fixed
+bullet may be 10 words or 28. Return exactly one claim per listed id.
 '''
 
 PROPOSE_PROMPT = RULES + '''The job asks for the skills listed in gaps, and none of them appears in
@@ -148,7 +178,9 @@ Choosing the role (this matters more than the wording):
 
 Writing the bullet:
 - Start with a capitalized past-tense verb, then the tool or method, then the
-  concrete artefact and a qualitative outcome. 15-25 words.
+  concrete artefact and a qualitative outcome. Length should match the
+  surrounding bullets' variety: anywhere from 10 to 28 words, not always the
+  same. Do not end with a trailing ", ...ing ..." clause.
 - Describe ordinary, believable work for that team: what was built or run,
   on what data, for whom. "Built Azure Data Factory pipelines to land
   meter-reading files into the analytics lakehouse on a nightly schedule" is

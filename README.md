@@ -166,6 +166,35 @@ OpenRouter and Claude have the same four slots with `OPENROUTER_` / `CLAUDE_`
 prefixes (`claude-haiku-4-5` is the cheap Claude choice). Prompt caching is enabled for the shared evidence block on the
 Anthropic path.
 
+## Does it read as AI-written?
+
+Detectors key on uniformity, not on truth, so the app treats uniformity as a
+defect:
+
+- **Your sentences are kept.** After the rewrite, any bullet whose rewording
+  added no job keyword is replaced by your original sentence, verbatim. Your
+  own prose is human text, varies naturally in length, and carries the odd
+  specifics that generated writing lacks. Restored sentences are then exempt
+  from every style rule: the app will not "fix" your words.
+- **Uniformity is checked in Python** on what the model did write: bullet
+  length spread, the trailing ", ...ing ..." clause that generated text leans
+  on, any verb opening more than two bullets, and a list of giveaway words
+  (leveraged, utilized, robust, seamless, comprehensive, spearheaded ...).
+  Failures go to a cheap repair call. They are polish, so they can never fail
+  a run.
+- **Your source is measured too**, and the report says plainly when the source
+  resume itself reads as machine-written.
+
+That last point matters most. If the resume you upload was itself written by
+an AI, its patterns carry through, because the app deliberately preserves your
+wording and cannot invent facts to replace it. Measured on the two sample
+resumes, output style tracks input style closely. The fix is upstream:
+rewrite your source bullets in your own voice and rerun.
+
+The app does not try to defeat detectors with invisible characters, homoglyphs
+or deliberate typos. Those are deceptive, and they break the ATS text
+extraction this whole tool exists to pass.
+
 ## The ATS score
 
 Deterministic, reproducible, and independent of the model:
@@ -225,7 +254,7 @@ python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-81 tests cover skeleton parsing, keyword matching, profile grounding, evidence enforcement,
+83 tests cover skeleton parsing, keyword matching, profile grounding, evidence enforcement,
 entry integrity, bullet limits and standards, the targeted repair and propose
 calls, the revision loop,
 automatic stripping of unsupported statements, budget handling, the

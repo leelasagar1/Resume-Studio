@@ -367,6 +367,59 @@ class ScriptedProvider(DemoProvider):
                      questions=[])
 
 
+def test_the_candidates_own_sentence_comes_back_when_the_rewrite_added_nothing():
+    from app.workflow import restore_source_wording
+    evidence = make_evidence(SAMPLE_RESUME)
+    profile = sample_profile()
+    draft = sample_draft(1)
+    entry = draft.sections[0].entries[0]
+    # A cosmetic paraphrase of E6 that adds no job keyword: the source wins.
+    entry.bullets[1].text = 'Automated recurring Python reports, cutting preparation time by 30%.'
+    # A rewrite that genuinely introduces a job keyword the source lacks: kept.
+    entry.bullets[0].text = 'Built SQL reports and Tableau views for the weekly operations review.'
+    entry.bullets[0].evidence_ids = ['E5', 'E11']
+    draft, restored = restore_source_wording(draft, evidence, profile)
+    assert restored == 1
+    assert entry.bullets[1].text == evidence['E6'].rstrip('.') + '.', "the candidate's own sentence is back"
+    assert 'Tableau' in entry.bullets[0].text, 'a rewrite that adds a keyword survives'
+
+    draft = sample_draft(1)
+    draft.sections[0].entries[0].bullets[1].text = 'Owned the month-end reporting calendar for the regional operations leads.'
+    _, restored = restore_source_wording(draft, evidence, profile)
+    assert restored == 0, 'a genuinely different sentence is not silently reverted'
+
+
+def test_style_checks_catch_the_uniformity_that_marks_generated_text():
+    from app.workflow import style_issues
+    draft = sample_draft(1)
+    entry = draft.sections[0].entries[0]
+    # Six bullets of near-identical length, all opening "Built", most ending in
+    # a trailing gerund clause: exactly what a detector keys on.
+    entry.bullets = [Claim(id=f'u{n}', evidence_ids=['E5'], proposed=False,
+                           text=f'Built reporting pipeline number {n} for the operations team, improving weekly turnaround times.')
+                     for n in range(6)]
+    issues = style_issues(draft)
+    assert sum('opens too many bullets' in i for i in issues) == 4, 'only the surplus openers are flagged'
+    assert sum('", ...ing ..." clause' in i for i in issues) == 5, 'one bullet may keep that shape'
+    assert any('reads as generated' in i and 'vary the lengths' in i for i in issues)
+
+    entry.bullets = [
+        Claim(id='v1', text='Rebuilt the nightly close report in SQL after the warehouse migration.', evidence_ids=['E5'], proposed=False),
+        Claim(id='v2', text='Automated recurring reports with Python, cutting preparation time by 30% for the analytics team each month.',
+              evidence_ids=['E6'], proposed=False),
+        Claim(id='v3', text='Presented monthly findings to operations stakeholders.', evidence_ids=['E7'], proposed=False),
+        Claim(id='v4', text='Cleaned customer datasets in SQL before they reached the reporting warehouse, which removed a recurring source of Monday errors.',
+              evidence_ids=['E10'], proposed=False),
+        Claim(id='v5', text='Documented the weekly review checks so new analysts could run them.', evidence_ids=['E5'], proposed=False),
+        Claim(id='v6', text='Tracked report accuracy each quarter and fixed the three queries that drifted most.', evidence_ids=['E5'], proposed=False)]
+    assert style_issues(draft) == [], 'varied, specific writing passes'
+
+    entry.bullets = [Claim(id='w1', text='Leveraged robust dashboards to drive seamless reporting for various stakeholders.',
+                           evidence_ids=['E5'], proposed=False)]
+    tells = style_issues(draft)
+    assert len(tells) == 1 and 'leveraged' in tells[0]
+
+
 def test_proposals_cover_preferred_skills_and_see_each_role_stack():
     from app.workflow import role_profiles, skill_gaps
     evidence = make_evidence(SAMPLE_RESUME)
@@ -492,7 +545,9 @@ def test_writer_receives_missing_keywords_and_factual_issues_on_revision():
 
 def test_unsupported_statements_are_stripped_when_revisions_run_out():
     draft = sample_draft(1)
-    draft.sections[0].entries[0].bullets[1].text = 'Automated recurring Python reports for the analytics team, cutting preparation time by 30%.'
+    # Far enough from the source line that the verbatim-restore pass leaves it
+    # alone, so the scripted audit still gets to judge it.
+    draft.sections[0].entries[0].bullets[1].text = 'Owned the month-end reporting calendar for the regional operations leads.'
     provider = ScriptedProvider(drafts=[draft], audits=[{'j1b2': False}])
     result = asyncio.run(run_workflow(request(max_revisions=0), provider, silent))
     ids = [b.id for b in Resume.model_validate(result['resume']).sections[0].entries[0].bullets]
@@ -502,7 +557,9 @@ def test_unsupported_statements_are_stripped_when_revisions_run_out():
 
 def test_clean_later_draft_beats_stripped_earlier_draft_on_tie():
     draft = sample_draft(1)
-    draft.sections[0].entries[0].bullets[1].text = 'Automated recurring Python reports for the analytics team, cutting preparation time by 30%.'
+    # Far enough from the source line that the verbatim-restore pass leaves it
+    # alone, so the scripted audit still gets to judge it.
+    draft.sections[0].entries[0].bullets[1].text = 'Owned the month-end reporting calendar for the regional operations leads.'
     provider = ScriptedProvider(drafts=[draft, sample_draft(1)], audits=[{'j1b2': False}, {}])
     result = asyncio.run(run_workflow(request(max_revisions=1, target_score=100), provider, silent))
     assert result['selected_version'] == 1 and 'removed automatically' not in result['stop_reason']
