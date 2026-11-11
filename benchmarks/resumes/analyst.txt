@@ -1,0 +1,29 @@
+Priya Raman
+priya.raman@example.com | 555-010-4410 | Austin, TX
+
+SUMMARY
+Data analyst with 5 years in e-commerce and subscription businesses. Comfortable owning a question from the first SQL query to the slide the VP reads.
+
+SKILLS
+SQL, Python (pandas), Excel, Tableau, Looker, Google Analytics, BigQuery, A/B testing, cohort analysis
+
+EXPERIENCE
+Senior Data Analyst | Lumen Box
+March 2022 - Present | Austin, TX
+• Own the weekly retention report for a 400k-subscriber meal-kit business; the growth team plans promotions from it every Monday.
+• Rebuilt the churn dashboard in Looker after the old one double-counted paused accounts, which had overstated churn by about 3 points.
+• Ran 14 pricing and onboarding A/B tests with the product team. Six shipped.
+• Wrote the BigQuery tables behind the finance team's cohort LTV model and documented every field.
+• Cut the monthly board-deck prep from four days to one by scripting the pulls in Python.
+• Trained three junior analysts on SQL review and how to write up a test result.
+
+Data Analyst | Parcelwise
+June 2019 - February 2022 | Austin, TX
+• Built Tableau dashboards for carrier on-time rates used by 30 account managers.
+• Found a billing error in zone surcharges worth $210k a year by reconciling invoices against shipment data in SQL.
+• Answered ad hoc questions from sales and operations, usually within a day.
+• Moved recurring Excel reports to scheduled SQL queries so nobody had to refresh them by hand.
+• Sized the market for a returns product; the estimate was within 10% of first-year volume.
+
+EDUCATION
+BA in Economics | University of Texas at Austin | 2019

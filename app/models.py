@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 MODEL_PATTERN = r'^[A-Za-z0-9][A-Za-z0-9._:/-]*$'
@@ -6,6 +6,18 @@ MODEL_PATTERN = r'^[A-Za-z0-9][A-Za-z0-9._:/-]*$'
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra='forbid')
+
+
+Term = Annotated[str, Field(min_length=1, max_length=120)]
+
+
+class ConfirmedSkill(StrictModel):
+    """A job skill the candidate says they have, before anything is written.
+    With a role and one line on what they did, it becomes a source bullet of
+    that role; without, it is listed under Skills."""
+    term: Term
+    entry_id: str = Field(default='', max_length=20)
+    detail: str = Field(default='', max_length=300)
 
 
 class GenerateRequest(StrictModel):
@@ -21,6 +33,19 @@ class GenerateRequest(StrictModel):
     model: str | None = Field(default=None, min_length=1, max_length=160, pattern=MODEL_PATTERN)
     writer_model: str | None = Field(default=None, min_length=1, max_length=160, pattern=MODEL_PATTERN)
     reviewer_model: str | None = Field(default=None, min_length=1, max_length=160, pattern=MODEL_PATTERN)
+    # Decisions from the keyword review that precedes writing (all optional).
+    removed_keywords: list[Term] = Field(default_factory=list, max_length=80)    # not a real requirement: not scored
+    declined_keywords: list[Term] = Field(default_factory=list, max_length=80)   # "I don't have this": never proposed
+    confirmed_skills: list[ConfirmedSkill] = Field(default_factory=list, max_length=40)
+
+
+class AnalyzeRequest(StrictModel):
+    resume_text: str = Field(min_length=80, max_length=60000)
+    job_text: str = Field(min_length=80, max_length=20000)
+    target_title: str = Field(default='', max_length=120)
+    additional_facts: str = Field(default='', max_length=4000)
+    provider: Literal['openai', 'openrouter', 'claude'] | None = None
+    model: str | None = Field(default=None, min_length=1, max_length=160, pattern=MODEL_PATTERN)
 
 
 # ---------------------------------------------------------------- job profile

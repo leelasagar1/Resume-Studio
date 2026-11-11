@@ -1,0 +1,23 @@
+Machine Learning Engineer
+Kestrel Mobility
+
+Kestrel builds routing software for delivery fleets. We are looking for a Machine Learning Engineer to own the path from trained model to reliable service.
+
+Responsibilities
+- Productionize machine learning models for delivery ETA prediction and route optimization.
+- Build and maintain training and inference pipelines on AWS SageMaker.
+- Containerize services with Docker and deploy them on Kubernetes.
+- Set up model monitoring, drift detection and automated retraining.
+- Write clean, tested Python and review other engineers' code.
+- Partner with data scientists to turn prototypes into services with clear SLAs.
+
+Qualifications
+- 4+ years building machine learning systems in production.
+- Python, SQL and one deep learning framework (PyTorch or TensorFlow).
+- Experience with MLOps tooling such as MLflow, Airflow or Kubeflow.
+- Experience with CI/CD and infrastructure as code (Terraform).
+- Bachelor's degree in Computer Science or a related field.
+
+Preferred
+- Experience with Spark, feature stores, or streaming data (Kafka).
+- Logistics domain experience.

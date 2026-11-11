@@ -1,29 +1,29 @@
 import re
+import time
 from difflib import SequenceMatcher
 from .agents import BudgetExceeded
 from .documents import render_docx
 from .models import Audit, Claim, ClaimCheck, Resume, SkillItem, claims, proposed_claims, skill_items, resume_plain_text
-from .skeleton import (assemble, best_group, bullet_evidence_ids, clean_markdown, parse_resume, skeleton_payload, strip_page_furniture,
+from .skeleton import (assemble, best_group, bullet_evidence_ids, clean_markdown, make_evidence, parse_resume, skeleton_payload, strip_page_furniture,
                        strip_pasted_job)
+from .review import apply_decisions, job_profile
 from .scoring import (_similar, count_occurrences, ground_profile, inflected_occurrences, keyword_hits, keyword_in_evidence,
                       normalize, score_resume)
 
 NUMBER = r'\d+(?:[.,]\d+)*%?'
 
 
-def make_evidence(text):
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    return {f'E{i + 1}': line for i, line in enumerate(lines)}
-
-
-def keyword_status(ats, profile, evidence):
+def keyword_status(ats, profile, evidence, declined=frozenset()):
     """What the writer sees: matched terms, missing terms, and for each missing
     term whether the candidate's evidence contains it (may be written into
-    bullets) or not (Skills-only, unevidenced)."""
+    bullets) or not (Skills-only, unevidenced). Skills the candidate said they
+    do not have are left out, so no writer is asked to place them."""
     normalized_evidence = normalize(' '.join(evidence.values()))
     by_id = {k.id: k for k in profile.keywords}
     missing = []
     for r in ats['missing']:
+        if normalize(r['term']) in declined:
+            continue
         in_evidence = keyword_in_evidence(by_id[r['id']], normalized_evidence)
         missing.append({'id': r['id'], 'term': r['term'], 'priority': r['priority'], 'kind': r['kind'],
                         'in_candidate_evidence': in_evidence,
@@ -261,7 +261,7 @@ KIND_LABELS = {'tool': 'Tools Platforms Technologies Frameworks Languages Cloud 
                'domain': 'Domains Methods Industry Analytics'}
 
 
-def offer_missing_skills(resume, evidence, profile):
+def offer_missing_skills(resume, evidence, profile, declined=frozenset()):
     """Missing job skills the evidence lacks go straight into Skills as
     unconfirmed items (empty evidence), required first, within the cap. The
     candidate ticks the ones they have; the rest never reach the document.
@@ -275,6 +275,7 @@ def offer_missing_skills(resume, evidence, profile):
     slots = MAX_UNVERIFIED_SKILLS - len(unverified_terms(resume))
     wanted = [k for k in sorted(profile.keywords, key=lambda k: k.priority != 'required')
               if k.kind in KIND_LABELS and len(k.term.split()) <= 4 and not CREDENTIAL.search(k.term)
+              and normalize(k.term) not in declined
               and not keyword_hits(k, text) and not keyword_in_evidence(k, normalized_evidence)]
     added = 0
     for keyword in wanted[:max(0, slots)]:
@@ -283,6 +284,42 @@ def offer_missing_skills(resume, evidence, profile):
         group.items.append(SkillItem(text=text, evidence_ids=[]))
         added += 1
     return resume, added
+
+
+def drop_declined(resume, declined):
+    """The candidate said they do not have these skills: no unconfirmed Skills
+    item and no proposed bullet may carry them, whoever wrote it."""
+    if not declined:
+        return resume
+    hit = lambda text: any(keyword_hits(k, normalize(text)) for k in declined)
+    for section in resume.sections:
+        for group in section.skill_groups:
+            group.items = [i for i in group.items if i.evidence_ids or not hit(i.text)]
+        section.skill_groups = [g for g in section.skill_groups if g.items]
+        for entry in section.entries:
+            entry.bullets = [b for b in entry.bullets if not (b.proposed and hit(b.text))]
+    return resume
+
+
+class Timed:
+    """Records how long each agent step takes, for the run log."""
+    STEPS = ('profile', 'write', 'repair', 'propose', 'audit')
+
+    def __init__(self, provider, log):
+        self._provider, self._log = provider, log
+
+    def __getattr__(self, name):
+        attr = getattr(self._provider, name)
+        if name not in self.STEPS:
+            return attr
+
+        async def timed(*args, **kwargs):
+            started = time.monotonic()
+            try:
+                return await attr(*args, **kwargs)
+            finally:
+                self._log.append({'step': name, 'seconds': round(time.monotonic() - started, 1)})
+        return timed
 
 
 def unverified_terms(resume):
@@ -961,13 +998,14 @@ def source_style_report(evidence):
     openers = Counter(l.split()[0].lower() for l in lines)
     top, repeats = openers.most_common(1)[0]
     tail_share = round(100 * len(tails) / len(lines))
-    machine_like = tail_share >= 35 or statistics.pstdev(lengths) < 4
+    # Too few sentences say nothing about habit: five similar lines are not a pattern.
+    machine_like = len(lines) >= 12 and (tail_share >= 35 or statistics.pstdev(lengths) < 4)
     return {'sentences': len(lines), 'length_stdev': round(statistics.pstdev(lengths), 1),
             'gerund_tail_percent': tail_share, 'most_repeated_opener': top, 'opener_repeats': repeats,
             'reads_machine_written': machine_like,
             'advice': ('Your source resume itself shows the patterns AI detectors key on '
                        f'({tail_share}% of its sentences end in a ", ...ing ..." clause and "{top}" opens {repeats}). '
-                       'This app keeps your wording wherever it can, so those patterns carry through. '
+                       'The rewrite varies sentence shape and length, but it works from your sentences. '
                        'Rewriting those source bullets in your own voice is the single biggest change you can make.')
             if machine_like else 'Your source resume reads as human-written.'}
 
@@ -1182,37 +1220,40 @@ def evidenced_gaps(gaps, profile, evidence):
 
 
 async def run_workflow(request, provider, emit):
-    marked_text = strip_page_furniture(strip_pasted_job(request.resume_text, request.job_text))
-    resume_text = clean_markdown(marked_text)
+    started = time.monotonic()
+    timings = []
+    original_text = strip_page_furniture(strip_pasted_job(request.resume_text, request.job_text))
     # A long master resume needs proportionally more tokens; the configured cap
     # stays the floor so a normal resume is unaffected.
     if hasattr(provider, 'limit'):
-        provider.limit = max(provider.limit, 16 * len(resume_text))
-    evidence = make_evidence(resume_text + '\n' + request.additional_facts)
+        provider.limit = max(provider.limit, 16 * len(original_text))
+    provider = Timed(provider, timings)
     await emit('analyzing', 'Extracting the job’s ATS keywords', 10)
-    # An empty or ungrounded extraction is an occasional model misfire (seen on
-    # ads that are only a requirements list); ask again before giving up.
-    for attempt in range(3):
-        try:
-            profile = ground_profile(await provider.profile(request.job_text), request.job_text)
-            break
-        except ValueError:
-            if attempt == 2:
-                raise
+    # The same posting always yields the same keyword list (cached per job text).
+    profile, profile_cached = await job_profile(provider, request.job_text)
     if request.target_title.strip():
         profile.title = ' '.join(request.target_title.split())
+    # The candidate's review decisions: terms that are not real requirements
+    # leave the score, skills they have are written into the source text, and
+    # skills they do not have are never proposed.
+    profile, marked_text, declined_keywords, decisions = apply_decisions(profile, original_text, request)
+    declined = frozenset(normalize(k.term) for k in declined_keywords)
+    resume_text = clean_markdown(marked_text)
+    evidence = make_evidence(resume_text + '\n' + request.additional_facts)
     skeleton = parse_resume(evidence, frozenset(bullet_evidence_ids(marked_text)))
     payload = skeleton_payload(skeleton)
     source_style = source_style_report(evidence)
-    payload['source_reads_machine_written'] = source_style['reads_machine_written']
+    machine_source = bool(source_style and source_style['reads_machine_written'])
+    payload['source_reads_machine_written'] = machine_source
     from types import SimpleNamespace
     for section in payload['sections']:
         for entry in section['entries']:
             low, high = bullet_range(SimpleNamespace(heading=SimpleNamespace(text=entry['heading']),
                                                      detail=SimpleNamespace(text=entry['detail']) if entry['detail'] else None))
             entry['bullet_count'] = f'{low}-{high}'
-    before = score_resume(profile, resume_text)
-    status = keyword_status(before, profile, evidence)
+    # "Before" is the resume as submitted, without anything confirmed in review.
+    before = score_resume(profile, clean_markdown(original_text))
+    status = keyword_status(score_resume(profile, resume_text), profile, evidence, declined)
     best = None
     previous = feedback = None
     history = []
@@ -1232,7 +1273,8 @@ async def run_workflow(request, provider, emit):
             rewrite = await provider.write(evidence, profile, status, payload, previous, feedback)
             draft = normalize_skills(assemble(skeleton, rewrite, evidence), evidence, profile)
             draft = restore_proposals(draft, kept_proposals)
-            draft, _ = offer_missing_skills(draft, evidence, profile)
+            draft = drop_declined(draft, declined_keywords)
+            draft, _ = offer_missing_skills(draft, evidence, profile, declined)
             draft = demote_unheld_title(draft, evidence, profile)
             draft, backfilled = backfill_bullets(draft, evidence, profile)
             draft = tidy_layout(draft)
@@ -1249,19 +1291,21 @@ async def run_workflow(request, provider, emit):
                 local = [i for i in local if not is_polish(i)]
             # Proposals are drafted once per job skill; a skill the proposer or
             # reviewer could not place is not retried in later rounds.
-            gaps = [] if local else [g for g in skill_gaps(draft, profile) if g not in attempted_gaps]
+            gaps = [] if local else [g for g in skill_gaps(draft, profile)
+                                     if g not in attempted_gaps and normalize(g) not in declined]
             if gaps:
                 await emit('writing', 'Drafting practical bullets for the job skills your resume does not mention',
                            15 + version * step + step // 3)
                 attempted_gaps.update(gaps)
                 draft, _, reasons = await add_proposed_bullets(provider, evidence, profile, draft, gaps)
+                draft = drop_declined(draft, declined_keywords)
                 fit_reasons.update(reasons)
             draft, _ = prune_pointless_proposals(draft, evidence, profile)
             draft, trimmed = trim_bullets(draft, profile)
             # The candidate's own sentences come back only when they read as a
             # person wrote them; restoring a machine-sounding source would undo
             # the style repair.
-            draft, restored = ((draft, 0) if source_style['reads_machine_written']
+            draft, restored = ((draft, 0) if machine_source
                                else restore_source_wording(draft, evidence, profile))
             # One polish pass over the final bullet set, proposals included:
             # summary wording plus anything that reads as generated. Polish
@@ -1278,7 +1322,7 @@ async def run_workflow(request, provider, emit):
                 local = [i for i in after if not is_polish(i)]
                 polish = [i for i in after if is_polish(i)] + style_issues(draft, source_lines)
             ats = score_resume(profile, resume_plain_text(draft))
-            status = keyword_status(ats, profile, evidence)
+            status = keyword_status(ats, profile, evidence, declined)
             if local and version < rounds - 1:
                 # Cheap deterministic failure: rewrite before paying for an audit.
                 history.append({'version': version, 'score': ats['score'], 'factual_pass': not local, 'audited': False,
@@ -1293,7 +1337,7 @@ async def run_workflow(request, provider, emit):
             kept_proposals.update({c.id: (entry_of[c.id], c.model_copy()) for c in proposed_claims(draft)
                                    if c.id in entry_of})
             ats = score_resume(profile, resume_plain_text(draft))
-            status = keyword_status(ats, profile, evidence)
+            status = keyword_status(ats, profile, evidence, declined)
             result = evaluate(profile, draft, audit, local)
             # A few unverified statements are fixed in place: one small repair
             # call and a re-audit of only the reworded claims, instead of a full
@@ -1309,7 +1353,7 @@ async def run_workflow(request, provider, emit):
                 audit, more = await complete_audit(provider, evidence, draft, profile, audit_cache)
                 rejected += more
                 ats = score_resume(profile, resume_plain_text(draft))
-                status = keyword_status(ats, profile, evidence)
+                status = keyword_status(ats, profile, evidence, declined)
                 result = evaluate(profile, draft, audit, local)
             result['rejected_proposals'] = len(rejected)
             last_result = result
@@ -1370,7 +1414,9 @@ async def run_workflow(request, provider, emit):
               'before': {'score': before['score'], 'components': before['components'],
                          'matched': len(before['keywords']) - len(before['missing']), 'total': len(before['keywords'])},
               'usage': provider.usage() if hasattr(provider, 'usage') else {'calls': provider.calls, 'tokens': provider.tokens},
-              'source_style': source_style, 'evidence': evidence}
+              'source_style': source_style, 'evidence': evidence,
+              'timings': timings, 'seconds': round(time.monotonic() - started, 1),
+              'profile_cached': profile_cached, 'review_decisions': decisions}
     terms = unverified_terms(draft)
     proposed = proposals(draft, evidence, profile, fit_reasons, review_notes)
     if terms or proposed:
@@ -1379,7 +1425,7 @@ async def run_workflow(request, provider, emit):
         floor = score_resume(profile, resume_plain_text(floor_draft))
         common.update(unverified_terms=terms, proposals=proposed, floor_score=floor['score'],
                       document_checks=None, docx=None,
-                      stop_reason=stop_reason + ' Confirm the proposed bullets and highlighted skills you can stand behind before download.',
+                      stop_reason=stop_reason + ' That score counts suggestions you have not confirmed yet: tick the ones that are true before download.',
                       _pending={'profile': profile.model_dump(), 'draft': draft.model_dump(),
                                 'audit': audit_for(result), 'evidence': evidence, 'proposals': proposed})
         return common

@@ -92,7 +92,22 @@ A fictional 22,000-character, 7-role, 142-bullet master resume ran in about
 
 ## How it works
 
-1. **Extract** (1 call). The model pulls the job title, up to 60 ATS keywords
+0. **Check the job's keywords** (the first screen after you submit; untick
+   "Let me check the job's keywords before writing" to skip it). You see every
+   keyword the job will be scored on, split into "already in your resume" and
+   "not in your resume". For each missing one you choose:
+   - **I have this**: pick the role and write one line on what you did, and it
+     becomes a real source bullet of that role, cited and audited like the
+     rest of your resume. With no detail it is listed under Skills.
+   - **I don't have this**: it is never proposed, in a bullet or in Skills.
+   - **Not a real requirement**: it leaves the score.
+   - **Suggest a bullet to confirm** (the default): the old behaviour.
+   Saying what is true up front replaces most of the invented bullets with
+   your own facts, so there is far less to confirm at the end. The analysis is
+   cached per job posting (`data/profiles/`): the same ad always gives the
+   same keyword list, and the writing step that follows does not pay for it
+   again.
+1. **Extract** (1 call, skipped when the posting was already analysed). The model pulls the job title, up to 60 ATS keywords
    with aliases (`Machine Learning` → `ML`, `Spark` → `PySpark`), a
    required/preferred priority for each, and any explicit screening rules
    (degree, years, location). Python discards any keyword that does not
@@ -185,8 +200,10 @@ A fictional 22,000-character, 7-role, 142-bullet master resume ran in about
    issues back. If revisions run out, unsupported bullets
    are removed automatically rather than shipped.
 7. **Confirm**. Proposed bullets and unevidenced skills are listed with
-   checkboxes and highlighted in the preview. Uncheck anything you did not do
-   or could not discuss in an interview. The score is recomputed and the Word
+   checkboxes, **all unticked**, and highlighted in the preview. Tick only what
+   you did and could discuss in an interview. Until you confirm, the headline
+   score is what your resume supports on its own; the screen also shows the
+   score with every suggestion ticked. The score is recomputed and the Word
    file is generated.
 
 Typical live run with gpt-5.6-luna on the demo resume: one round, 10-13
@@ -309,6 +326,7 @@ interview prediction.
 | `app/scoring.py` | Deterministic keyword extraction grounding and ATS scoring |
 | `app/skeleton.py` | Deterministic resume parser and reassembly around the verbatim skeleton |
 | `app/agents.py` | Prompts and the OpenAI, OpenRouter and Claude adapters |
+| `app/review.py` | Keyword review before writing: per-posting analysis cache, the candidate's decisions |
 | `app/workflow.py` | Validation, audit orchestration, revision loop, best-draft selection |
 | `app/confirmation.py` | Skill confirmation and final export |
 | `app/documents.py` | Upload extraction and Word export with round-trip check |
@@ -316,6 +334,8 @@ interview prediction.
 | `static/` | Single-page frontend, no build step |
 | `setup.sh`, `start.sh`, `setup.ps1`, `start.ps1` | One-command install and start on macOS/Linux and Windows |
 | `Dockerfile`, `docker-compose.yml` | Container alternative |
+| `scripts/benchmark.py`, `benchmarks/` | Paid regression benchmark over fictional resumes and job ads |
+| `data/` (git-ignored) | Cached job analyses, `runs.jsonl` run log, benchmark results |
 
 ## Verification
 
@@ -332,10 +352,42 @@ confirmation flow, the API boundary and the Word round trip.
 Live generation was verified with Claude Sonnet on a real resume and job
 description: before 40 / after 100 with the factual audit passing.
 
+## Run log
+
+Every live run appends one line to `data/runs.jsonl`: time per step, calls,
+tokens, cost, the three scores (original, tailored without suggestions, with
+every suggestion), rounds, whether the first audit passed, your review
+decisions as counts, and the stop reason. It never contains resume or job
+text, so you can share it when asking why a run was slow or scored low.
+A later `confirmed` line records how many suggestions you accepted and the
+final score. In Docker the folder is mounted from `./data`, so it survives
+rebuilds.
+
+```bash
+tail -n 5 data/runs.jsonl
+```
+
+## Benchmark
+
+```bash
+python scripts/benchmark.py --live --repeats 2
+```
+
+Runs the full workflow over nine fixed pairs of fictional resumes and job
+ads in `benchmarks/` (a requirements-only ad with no title, "at least 2 of"
+lists, a filler-heavy ad, a 22,000-character master resume, and one
+deliberate misfit) and prints per-run time, cost, rounds, first-audit result,
+the three scores, junk Skills items and the score spread across repeats.
+About $0.02 per run. Use it before and after any change to the prompts or the
+rules: one good run proves nothing, because scores move a few points between
+runs. Results are saved under `data/benchmarks/`.
+
 ## Privacy and limits
 
 Single-user local app bound to 127.0.0.1. Uploaded files are parsed locally
 and not retained. Confirmed text is sent to the selected provider during live
 generation. Run state and generated documents stay in memory for one hour or
-until cleared. Do not expose this process to the internet without adding
+until cleared. The only things written to disk are in `data/`: cached job
+analyses (job-ad keywords, no resume content) and the run log (numbers only).
+Do not expose this process to the internet without adding
 authentication, durable storage and rate limits.

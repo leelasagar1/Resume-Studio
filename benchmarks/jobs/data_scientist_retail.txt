@@ -1,0 +1,25 @@
+Senior Data Scientist, Supply Chain
+Harborfield Stores
+
+About the role
+You will build the forecasting and optimization models that decide how much stock goes to each of our 900 stores. You will work with merchandising, supply chain and engineering to take models from notebook to production.
+
+What you'll do
+- Develop demand forecasting models for store replenishment and inventory allocation.
+- Formulate and solve optimization models (linear and mixed-integer programming) for allocation and markdown pricing.
+- Design and analyse A/B tests of pricing and replenishment changes.
+- Build data pipelines in Spark and SQL and deploy models with MLflow on Databricks.
+- Explain results to non-technical stakeholders in merchandising and finance.
+
+Requirements
+- Master's degree in Operations Research, Statistics, Computer Science or a related field.
+- 5+ years of experience in data science.
+- Strong Python and SQL.
+- Experience with time series forecasting and machine learning (XGBoost, scikit-learn).
+- Experience with an optimization solver such as Gurobi or CPLEX.
+
+Nice to have
+- PyTorch, causal inference, Airflow.
+- Retail or supply chain experience.
+
+We offer competitive pay, health insurance and a hybrid schedule. Harborfield is an equal opportunity employer.

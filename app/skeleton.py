@@ -81,6 +81,12 @@ def strip_pasted_job(resume_text: str, job_text: str) -> str:
     return '\n'.join(lines[:cut]).rstrip()
 
 
+def make_evidence(text: str) -> dict:
+    """Number every non-blank line: the E ids every claim cites."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return {f'E{i + 1}': line for i, line in enumerate(lines)}
+
+
 def is_list_line(text: str) -> bool:
     """'AI safety, Generative AI, LLMs, Python, ...': a comma list, not a bullet."""
     return text.count(',') >= 5 and text.count(',') * 4 >= len(text.split())

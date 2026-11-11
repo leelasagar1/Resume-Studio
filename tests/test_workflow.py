@@ -806,7 +806,7 @@ def excel_request(**kwargs):
 
 @pytest.fixture
 def no_offer(monkeypatch):
-    monkeypatch.setattr('app.workflow.offer_missing_skills', lambda resume, evidence, profile: (resume, 0))
+    monkeypatch.setattr('app.workflow.offer_missing_skills', lambda resume, evidence, profile, declined=frozenset(): (resume, 0))
 
 
 def test_nothing_left_to_gain_stops_after_one_round(no_offer):

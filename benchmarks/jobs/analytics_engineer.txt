@@ -1,0 +1,21 @@
+Analytics Engineer
+Juniper Freight
+
+Juniper Freight is rebuilding its data stack. As our second Analytics Engineer you will turn raw logistics data into models analysts trust.
+
+What you'll do
+- Build and maintain dbt models in Snowflake for shipments, carriers and billing.
+- Design dimensional data models and document them.
+- Write data quality tests and monitor data freshness.
+- Orchestrate pipelines with Airflow.
+- Partner with analysts on Tableau and Power BI dashboards.
+- Tune SQL performance and warehouse cost.
+
+What you bring
+- 4+ years in analytics engineering, data engineering or analytics.
+- Expert SQL and solid Python.
+- Experience with dbt and a cloud data warehouse (Snowflake, BigQuery or Redshift).
+- Experience with data modeling, ETL/ELT and version control with Git.
+- Clear communication with business stakeholders.
+
+Nice to have: Spark, logistics experience, experience with Fivetran or Airbyte.

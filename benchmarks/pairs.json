@@ -1,0 +1,11 @@
+[
+  {"name": "ds-retail_master",        "job": "data_scientist_retail.txt", "resume": "master_data_scientist.txt"},
+  {"name": "ml-engineer_master",      "job": "ml_engineer.txt",           "resume": "master_data_scientist.txt"},
+  {"name": "analytics-eng_master",    "job": "analytics_engineer.txt",    "resume": "master_data_scientist.txt"},
+  {"name": "data-analyst_analyst",    "job": "data_analyst.txt",          "resume": "analyst.txt"},
+  {"name": "bi-no-title_analyst",     "job": "bi_requirements_only.txt",  "resume": "analyst.txt"},
+  {"name": "product-analyst_analyst", "job": "product_analyst.txt",       "resume": "analyst.txt"},
+  {"name": "backend_backend",         "job": "backend_engineer.txt",      "resume": "backend_engineer.txt"},
+  {"name": "platform_backend",        "job": "platform_engineer.txt",     "resume": "backend_engineer.txt"},
+  {"name": "MISFIT_analyst-to-backend", "job": "backend_engineer.txt",    "resume": "analyst.txt"}
+]

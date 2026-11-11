@@ -1,0 +1,24 @@
+Senior Backend Engineer, Payments
+Corvid Pay
+
+Corvid Pay moves money for 40,000 small businesses. You will join the six-person ledger team.
+
+What you will do
+- Design and build Go services that record and reconcile payments.
+- Own API design for internal and partner-facing REST and gRPC APIs.
+- Improve reliability: idempotency, retries, observability and incident response.
+- Work with PostgreSQL at scale: schema design, query tuning and migrations.
+- Build event-driven systems on Kafka.
+- Take part in the on-call rotation and write postmortems.
+- Mentor engineers and lead technical design reviews.
+
+What we look for
+- 6+ years of backend engineering experience.
+- Strong Go or another statically typed language.
+- Experience with distributed systems and microservices on AWS.
+- Experience with Docker, Kubernetes and Terraform.
+- Experience with CI/CD pipelines.
+
+Nice to have
+- Payments or fintech experience, PCI DSS knowledge.
+- Experience with Redis and gRPC.

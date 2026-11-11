@@ -1,0 +1,21 @@
+Data Analyst
+Fernhill Subscriptions
+
+We sell subscription pet food to 250,000 households. The analytics team is four people and sits next to growth and finance.
+
+In this role you will:
+- Own retention and churn reporting and present findings to the growth team each week.
+- Write SQL against our BigQuery warehouse and build dashboards in Looker.
+- Design, run and read A/B tests with product managers.
+- Build cohort analysis and customer lifetime value models with finance.
+- Automate recurring reports in Python.
+- Maintain data documentation and data quality checks with analytics engineering (dbt).
+
+You have:
+- 3+ years of experience as a data analyst.
+- Advanced SQL and working Python.
+- Experience with a BI tool (Looker or Tableau).
+- A track record of turning analysis into decisions with stakeholders.
+- A bachelor's degree in a quantitative field.
+
+Bonus: dbt, experimentation platforms, subscription or e-commerce experience.

@@ -18,11 +18,11 @@ function setBusy(value) {
   busy = value;
   document.querySelectorAll('#resume-form input, #resume-form textarea, #resume-form select, #resume-form button').forEach(e => e.disabled = value);
   $('example').disabled = value;
-  $('generate').textContent = value ? 'Working on your resume…' : 'Generate my resume ↗';
+  $('generate').textContent = value ? 'Working on your resume…' : $('review-first').checked ? 'Check the job’s keywords ↗' : 'Generate my resume ↗';
 }
 
 function setView(name) {
-  for (const state of ['empty', 'progress', 'result']) $(state + '-state').hidden = state !== name;
+  for (const state of ['empty', 'progress', 'review', 'result']) $(state + '-state').hidden = state !== name;
 }
 
 async function upload(kind) {
@@ -45,7 +45,75 @@ async function upload(kind) {
   finally { setBusy(false); $(kind + '-file').value = ''; }
 }
 
-async function startRun(demo) {
+const inputs = () => ({ resume_text: $('resume-text').value.trim(), job_text: $('job-text').value.trim(),
+  target_title: $('target-title').value.trim(), additional_facts: $('facts').value.trim(),
+  provider: $('provider').value, model: $('model').value.trim() });
+
+// Step 1: show the job's keywords against this resume and let the candidate
+// say what is true before anything is written.
+async function runAnalysis() {
+  clearError();
+  if (!liveEnabled) { showError('Configure the selected provider’s API key in .env and restart the server.'); return; }
+  try {
+    if (jobId) await api(`/api/jobs/${jobId}`, { method: 'DELETE' }).catch(() => {});
+    jobId = null;
+    setBusy(true); setView('progress');
+    $('progress-message').textContent = 'Reading the job description'; $('progress-bar').value = 8;
+    $('run-kind').textContent = 'STEP 1 OF 2 · THE JOB’S KEYWORDS';
+    document.querySelectorAll('.stages li').forEach(e => e.classList.toggle('active', e.dataset.stage === 'analyzing'));
+    const data = await api('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(inputs()) });
+    renderReview(data);
+    setBusy(false); setView('review');
+  } catch (error) { setBusy(false); setView('empty'); showError(error.message); }
+}
+
+function renderReview(data) {
+  const missing = data.keywords.filter(k => !k.in_resume), matched = data.keywords.filter(k => k.in_resume);
+  $('review-intro').textContent = `${data.keywords.length} keywords scored${data.title ? ` for “${data.title}”` : ''}: ` +
+    `${matched.length} already in your resume, ${missing.length} not. Nothing is written until you continue.`;
+  const list = $('review-missing'); list.replaceChildren();
+  for (const keyword of missing) {
+    const row = el('div', undefined, 'review-row'); row.dataset.term = keyword.term;
+    const term = el('span', keyword.term, 'term'); term.append(el('small', keyword.priority));
+    const choice = el('select'); choice.setAttribute('aria-label', `What is true about ${keyword.term}`);
+    for (const [value, label] of [['suggest', 'Suggest a bullet to confirm'], ['have', 'I have this'],
+      ['decline', 'I don’t have this'], ['ignore', 'Not a real requirement']]) {
+      const option = el('option', label); option.value = value; choice.append(option);
+    }
+    const where = el('div', undefined, 'where'); where.hidden = true;
+    const role = el('select'); role.setAttribute('aria-label', `Where you used ${keyword.term}`);
+    const skillsOnly = el('option', 'List under Skills only'); skillsOnly.value = ''; role.append(skillsOnly);
+    for (const r of data.roles) { const option = el('option', r.heading); option.value = r.entry_id; role.append(option); }
+    const detail = el('input'); detail.type = 'text'; detail.maxLength = 300;
+    detail.placeholder = 'One line on what you did with it (gives you a real bullet)';
+    detail.setAttribute('aria-label', `What you did with ${keyword.term}`);
+    where.append(role, detail);
+    choice.addEventListener('change', () => { where.hidden = choice.value !== 'have'; });
+    row.append(term, choice, where); list.append(row);
+  }
+  $('review-missing-section').hidden = !missing.length;
+  const chips = $('review-matched'); chips.replaceChildren();
+  for (const keyword of matched) {
+    const chip = el('label', undefined, 'chip');
+    const input = el('input'); input.type = 'checkbox'; input.checked = true; input.value = keyword.term;
+    chip.append(input, el('span', keyword.term)); chips.append(chip);
+  }
+  $('review-matched-section').hidden = !matched.length;
+}
+
+function reviewDecisions() {
+  const decisions = { removed_keywords: [], declined_keywords: [], confirmed_skills: [] };
+  for (const row of $('review-missing').querySelectorAll('.review-row')) {
+    const [choice, role] = row.querySelectorAll('select'), detail = row.querySelector('input');
+    if (choice.value === 'ignore') decisions.removed_keywords.push(row.dataset.term);
+    else if (choice.value === 'decline') decisions.declined_keywords.push(row.dataset.term);
+    else if (choice.value === 'have') decisions.confirmed_skills.push({ term: row.dataset.term, entry_id: role.value, detail: detail.value.trim() });
+  }
+  for (const input of $('review-matched').querySelectorAll('input:not(:checked)')) decisions.removed_keywords.push(input.value);
+  return decisions;
+}
+
+async function startRun(demo, decisions = {}) {
   clearError();
   if (!demo && !liveEnabled) { showError('Configure the selected provider’s API key in .env and restart the server.'); return; }
   try {
@@ -57,9 +125,7 @@ async function startRun(demo) {
     $('run-kind').textContent = demo ? 'FICTIONAL EXAMPLE · NO AI CALLS' : 'YOUR RESUME IS TAKING SHAPE';
     const result = await api(demo ? '/api/demo' : '/api/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: demo ? '{}' : JSON.stringify({ resume_text: $('resume-text').value.trim(),
-        job_text: $('job-text').value.trim(), target_title: $('target-title').value.trim(), additional_facts: $('facts').value.trim(),
-        provider: $('provider').value, model: $('model').value.trim(),
+      body: demo ? '{}' : JSON.stringify({ ...inputs(), ...decisions,
         confirmed: $('confirmed').checked, max_revisions: Number($('revisions').value), target_score: Number($('target').value) })
     });
     jobId = result.id;
@@ -93,12 +159,17 @@ function renderResult(job) {
   const pending = job.status === 'needs_confirmation';
   const unverified = new Set((data.unverified_terms || []).map(t => t.toLowerCase()));
   $('result-label').textContent = job.demo ? 'FICTIONAL EXAMPLE · ILLUSTRATIVE SCORES' : pending ? 'DRAFT · CONFIRM CONTENT BEFORE DOWNLOAD' : 'REVIEW COMPLETE';
-  $('score').textContent = report.score;
-  $('score-caption').textContent = 'Exact-match keyword coverage of this job. Not a hiring prediction.';
+  // Until the candidate confirms, the headline number is what the resume
+  // supports on its own, not the score with every suggestion accepted.
+  $('score').textContent = pending ? data.floor_score : report.score;
+  $('score-caption').textContent = pending ? 'From what your resume already supports. Suggestions you confirm below can raise it.'
+    : 'Exact-match keyword coverage of this job. Not a hiring prediction.';
   const comparison = $('score-comparison'); comparison.replaceChildren();
   const req = report.components.required_keywords, pref = report.components.preferred_keywords;
-  comparison.append(el('p', `Before: ${data.before.score}/100 (${data.before.matched} of ${data.before.total} keywords) · After: ${report.score}/100 (${req.matched + pref.matched} of ${req.total + pref.total} keywords)`));
-  if (pending) comparison.append(el('p', `With every item below confirmed: ${report.score}/100 · with all of them removed: ${data.floor_score}/100.`));
+  comparison.append(el('p', pending
+    ? `Your original resume: ${data.before.score}/100 · tailored, nothing confirmed: ${data.floor_score}/100 · every suggestion confirmed: ${report.score}/100`
+    : `Before: ${data.before.score}/100 (${data.before.matched} of ${data.before.total} keywords) · After: ${report.score}/100 (${req.matched + pref.matched} of ${req.total + pref.total} keywords)`));
+  $('confirm-score').textContent = pending ? `Nothing ticked: ${data.floor_score}/100. Everything ticked: ${report.score}/100. Tick only what is true.` : '';
   $('stop-reason').textContent = data.stop_reason + (!report.eligible ? ' An explicit eligibility rule is unmet or unknown; see the report.' : '');
   const style = $('source-style'); style.replaceChildren();
   if (data.source_style && data.source_style.reads_machine_written) {
@@ -114,7 +185,7 @@ function renderResult(job) {
   const proposalList = $('proposal-list'); proposalList.replaceChildren();
   for (const term of data.unverified_terms || []) {
     const label = el('label', undefined, 'proposal');
-    const input = el('input'); input.type = 'checkbox'; input.value = term; input.checked = true;
+    const input = el('input'); input.type = 'checkbox'; input.value = term;
     const body = el('span'); body.append(el('span', term));
     label.append(input, body); proposalList.append(label);
   }
@@ -123,7 +194,7 @@ function renderResult(job) {
   const proposedIds = new Set((data.proposals || []).map(p => p.id));
   for (const proposal of data.proposals || []) {
     const label = el('label', undefined, 'proposal');
-    const input = el('input'); input.type = 'checkbox'; input.value = proposal.id; input.checked = true;
+    const input = el('input'); input.type = 'checkbox'; input.value = proposal.id;
     const body = el('span');
     body.append(el('strong', proposal.role_context), el('span', proposal.text));
     if (proposal.terms.length) body.append(el('small', 'Adds the job skill' + (proposal.terms.length > 1 ? 's: ' : ': ') + proposal.terms.join(', ')));
@@ -183,7 +254,7 @@ function renderResult(job) {
     const extra = value.total !== undefined ? ` (${value.matched}/${value.total})` : value.reason ? ` (${value.reason})` : value.missing?.length ? ` (missing: ${value.missing.join(', ')})` : '';
     const row = el('tr'); row.append(el('td', (labels[name] || name) + extra), el('td', `${value.earned} / ${value.available}`)); table.append(row);
   }
-  details.append(table, el('p', `Selected draft: ${data.selected_version + 1}. Drafts: ${data.history.length}. Provider: ${job.provider || 'default'}. Model: ${job.model || 'fictional demo'}. Agent calls: ${data.usage.calls}. Tokens: ${data.usage.tokens.toLocaleString()}${data.usage.estimated_cost_usd != null ? ` (≈ $${data.usage.estimated_cost_usd.toFixed(3)})` : ''}.`),
+  details.append(table, el('p', `Selected draft: ${data.selected_version + 1}. Drafts: ${data.history.length}. Provider: ${job.provider || 'default'}. Model: ${job.model || 'fictional demo'}. Time: ${data.seconds ?? '—'}s. Agent calls: ${data.usage.calls}. Tokens: ${data.usage.tokens.toLocaleString()}${data.usage.estimated_cost_usd != null ? ` (≈ $${data.usage.estimated_cost_usd.toFixed(3)})` : ''}.`),
     el('p', data.document_checks ? 'Word text extraction check passed. ' + data.document_checks.visual_check : 'Word export is waiting for your confirmation.'));
   const evidence = $('evidence-list'); evidence.replaceChildren();
   Object.values(data.evidence).forEach(text => evidence.append(el('p', text)));
@@ -227,7 +298,15 @@ async function clearRun() {
 $('resume-file').addEventListener('change', () => upload('resume'));
 $('job-file').addEventListener('change', () => upload('job'));
 for (const id of ['resume-text', 'facts']) $(id).addEventListener('input', () => { $('confirmed').checked = false; });
-$('resume-form').addEventListener('submit', event => { event.preventDefault(); if (!busy) startRun(false); });
+$('resume-form').addEventListener('submit', event => {
+  event.preventDefault();
+  if (busy) return;
+  if ($('review-first').checked) runAnalysis(); else startRun(false);
+});
+$('review-go').addEventListener('click', () => { if (!busy) startRun(false, reviewDecisions()); });
+$('review-back').addEventListener('click', () => setView('empty'));
+$('review-first').addEventListener('change', () => setBusy(busy));
+setBusy(false);
 $('example').addEventListener('click', async () => {
   clearError();
   try {

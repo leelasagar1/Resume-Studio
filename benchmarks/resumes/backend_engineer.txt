@@ -1,0 +1,37 @@
+Marcus Hale
+marcus.hale@example.com | 555-010-7782 | Denver, CO | github.com/mhale-example
+
+Backend engineer, 8 years. Mostly payments and logistics systems in Go and Python.
+
+TECHNICAL SKILLS
+Languages: Go, Python, SQL, Bash
+Infrastructure: AWS (ECS, RDS, SQS, Lambda), Docker, Terraform, GitHub Actions
+Data: PostgreSQL, Redis, Kafka
+Practices: code review, on-call, incident postmortems, API design
+
+EXPERIENCE
+Senior Software Engineer — Tallybird Payments
+January 2021 – Present | Denver, CO
+• Led the rewrite of the ledger service from a Python monolith into three Go services; p99 latency fell from 900ms to 140ms.
+• Designed the idempotency layer for card captures after a double-charge incident. No repeat in 30 months.
+• On the on-call rotation for payment APIs handling about 2,000 requests a second at peak.
+• Moved deploys from a weekly manual release to GitHub Actions pipelines that ship several times a day.
+• Wrote the Terraform modules the other four backend teams now use for RDS and SQS.
+• Mentored two engineers through their first production launches.
+• Cut the monthly AWS bill for the team by 22% by right-sizing ECS tasks and dropping an unused Redis cluster.
+
+Software Engineer — Freightline
+August 2017 – December 2020 | Denver, CO
+• Built the shipment-tracking API in Python and PostgreSQL used by 600 carrier integrations.
+• Introduced Kafka for status events, replacing a polling job that fell behind every afternoon.
+• Wrote integration tests that caught a rate-calculation bug before a contract renewal.
+• Reduced a nightly reconciliation job from 5 hours to 40 minutes by batching queries.
+• Ran the migration from a self-hosted database to RDS with 20 minutes of downtime.
+
+Junior Developer — Summit Web Studio
+June 2016 – July 2017 | Boulder, CO
+• Built and maintained client sites in Python and JavaScript.
+• Set up the studio's first automated backups after a client lost a week of content.
+
+EDUCATION
+BS in Computer Science | Colorado State University | 2016

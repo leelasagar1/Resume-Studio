@@ -1,5 +1,6 @@
 # secrets and local state
 .env
+data/
 .venv/
 venv/
 

@@ -1,0 +1,10 @@
+MINIMUM QUALIFICATIONS
+Must have a Bachelor's degree in Economics, Statistics, Mathematics, Computer Science or a related field and 4 years of related work experience.
+Alternatively, must have a Master's degree in one of those fields and 2 years of related work experience.
+Must have 3 years of experience writing SQL against a cloud data warehouse.
+Must have 2 years of experience using at least 2 of the following BI and analytics tools: Tableau, Looker, Power BI, Qlik, Mode.
+Must have 2 years of experience with Python or R for data analysis.
+Must have experience designing and analysing A/B tests.
+Must have experience building cohort analysis and retention reporting for a subscription or e-commerce business.
+Must have 1 year of experience with data modeling tools (e.g. dbt) and version control using Git.
+Must have experience presenting analytical solutions to business stakeholders and leading cross-functional projects.

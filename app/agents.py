@@ -317,6 +317,7 @@ def price_for(model):
 
 
 class OpenAIProvider:
+    cacheable = True   # job analyses are remembered per posting (see review.job_profile)
     provider_name = 'OpenAI'
     key_name = 'OPENAI_API_KEY'
 

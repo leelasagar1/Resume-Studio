@@ -38,6 +38,7 @@
           </fieldset>
           <div class="options-row"><label for="revisions">Rounds</label><select id="revisions"><option value="0">Fast · one draft</option><option value="1">Up to 1 revision</option><option value="2" selected>Up to 2 revisions</option><option value="3">Up to 3 revisions</option></select></div>
           <div class="options-row"><label for="target">Target ATS score</label><select id="target"><option value="85">85</option><option value="90" selected>90</option><option value="95">95</option></select></div>
+          <label class="confirmation review-first"><input id="review-first" type="checkbox" checked><span>Let me check the job’s keywords before writing <em>(recommended: say which skills you have, drop ones that are not real requirements)</em></span></label>
           <label class="confirmation"><input id="confirmed" type="checkbox" required><span>I’ve reviewed the source text and confirm it reflects my actual experience.</span></label>
           <button class="primary-button" id="generate" type="submit">Generate my resume <span aria-hidden="true">↗</span></button>
           <p class="privacy-note">Live generation sends this text to your selected AI provider. Files are processed locally; run data clears after one hour or when you clear the run.</p>
@@ -48,14 +49,31 @@
         <div id="empty-state" class="empty-state">
           <div class="paper-illustration" aria-hidden="true"><span class="paper-monogram">Aa</span><span class="paper-line wide"></span><span class="paper-line"></span><span class="paper-section"></span><span class="paper-line wide"></span><span class="paper-line wide"></span><span class="paper-line"></span><span class="paper-section"></span><span class="paper-line wide"></span><span class="paper-line"></span><span class="paper-seal">✓</span></div>
           <h3>A clearer story, ready to send.</h3><p>Your resume preview and match report<br>will appear here.</p>
-          <div class="how-it-works"><div><span>1</span><p><strong>Extract</strong>Pull the job’s ATS keywords.</p></div><div><span>2</span><p><strong>Tailor</strong>Rewrite with the job’s terms, audited against your facts.</p></div><div><span>3</span><p><strong>Confirm</strong>Keep only skills you really have, then download Word.</p></div></div>
+          <div class="how-it-works"><div><span>1</span><p><strong>Check</strong>See the job’s keywords and say which skills you have.</p></div><div><span>2</span><p><strong>Tailor</strong>Rewrite with the job’s terms, audited against your facts.</p></div><div><span>3</span><p><strong>Confirm</strong>Tick only suggestions that are true, then download Word.</p></div></div>
           <p class="score-explainer">The ATS score is deterministic keyword matching, like the scanners employers use.<br>It is not a hiring prediction.</p>
         </div>
         <div id="progress-state" hidden aria-live="polite">
           <p class="eyebrow" id="run-kind">YOUR RESUME IS TAKING SHAPE</p><h3 id="progress-message">Starting your workflow</h3>
           <progress id="progress-bar" max="100" value="0"></progress>
           <ol class="stages"><li data-stage="analyzing">Read the role</li><li data-stage="writing">Tailor your experience</li><li data-stage="reviewing">Review the draft</li><li data-stage="exporting">Prepare your download</li></ol>
-          <p class="muted">Each claim is audited against your source text. Typical live run: 1–3 minutes.</p><button class="text-button" id="cancel">Cancel and clear run</button>
+          <p class="muted">Each claim is audited against your source text. Typical live run: about a minute.</p><button class="text-button" id="cancel">Cancel and clear run</button>
+        </div>
+        <div id="review-state" hidden>
+          <p class="eyebrow">STEP 1 OF 2 · CHECK WHAT THE JOB ASKS FOR</p>
+          <h3 class="review-heading">Before anything is written</h3>
+          <p class="muted" id="review-intro"></p>
+          <section id="review-missing-section">
+            <h4 class="confirm-subtitle">Not in your resume</h4>
+            <p class="muted">For each one, say what is true. “I have this” with a role and one line on what you did gives you a real bullet instead of a suggested one.</p>
+            <div id="review-missing"></div>
+          </section>
+          <section id="review-matched-section">
+            <h4 class="confirm-subtitle">Already in your resume</h4>
+            <p class="muted">Untick anything that is not a real requirement of this job; it will not be scored.</p>
+            <div id="review-matched" class="chip-list"></div>
+          </section>
+          <button type="button" id="review-go" class="primary-button">Write my resume <span aria-hidden="true">↗</span></button>
+          <button type="button" class="text-button" id="review-back">Back to my inputs</button>
         </div>
         <div id="result-state" hidden>
           <div class="result-top"><span class="result-label" id="result-label">REVIEW COMPLETE</span><button class="text-button" id="clear">Clear run</button></div>
@@ -65,7 +83,8 @@
           <p id="source-style" class="source-style" hidden></p>
           <section id="confirm-section" class="confirm-section" aria-labelledby="confirm-title" hidden>
             <h3 id="confirm-title">Content to confirm</h3>
-            <p>Nothing below was found in your source text. It was added so the job's required keywords appear in your experience and skills. Uncheck anything you did not actually do or could not discuss in an interview. Unchecked items are removed and the score recomputed.</p>
+            <p>Nothing below was found in your source text. It was drafted so the job's keywords could appear in your experience and skills. Tick only what you actually did and could discuss in an interview. Anything left unticked is removed and the score recomputed.</p>
+            <p id="confirm-score" class="confirm-score" aria-live="polite"></p>
             <h4 class="confirm-subtitle" id="bullets-title">Proposed experience bullets &mdash; tick only work you actually did</h4>
             <div id="bullet-list"></div>
             <h4 class="confirm-subtitle" id="skills-title">Skills</h4>

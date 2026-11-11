@@ -8,3 +8,5 @@ __pycache__
 .DS_Store
 demo_files
 tests
+data
+benchmarks

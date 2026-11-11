@@ -6,4 +6,7 @@ services:
     ports:
       # Host port is configurable: PORT=9000 docker compose up
       - "127.0.0.1:${PORT:-8765}:8765"
+    volumes:
+      # Cached job analyses and the run log (no resume content) survive rebuilds.
+      - ./data:/app/data
     restart: unless-stopped

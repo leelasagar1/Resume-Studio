@@ -1,0 +1,19 @@
+Platform Engineer
+Oakline Health
+
+You'll help us build a robust, scalable and reliable platform that our product engineering teams love to use. We value ownership, strong communication and a passion for developer experience.
+
+Responsibilities
+- Build and operate our Kubernetes platform on AWS (EKS).
+- Write infrastructure as code with Terraform and manage configuration with Helm.
+- Build CI/CD pipelines in GitHub Actions and improve deployment performance and reliability.
+- Run observability tooling such as Prometheus, Grafana or Datadog.
+- Automate operational work in Python, Go or Bash.
+- Support security and compliance work (HIPAA, SOC 2) with best practices.
+- Take part in on-call and drive incident postmortems.
+
+Requirements
+- 5+ years in platform, DevOps or site reliability engineering.
+- Deep experience with AWS, Docker and Kubernetes.
+- Strong Linux and networking fundamentals.
+- Experience with PostgreSQL operations is a plus.

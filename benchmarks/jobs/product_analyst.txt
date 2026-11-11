@@ -1,0 +1,21 @@
+Product Analyst, Growth
+Tidewater Apps
+
+Tidewater makes a budgeting app used by 2 million people. The growth team needs an analyst who can say what happened, why, and what to try next.
+
+Responsibilities
+- Define and track product metrics for activation, retention and monetization.
+- Design experiments with product managers and analyse A/B tests with sound statistics.
+- Build funnel analysis and cohort analysis in SQL.
+- Create self-serve dashboards in tools such as Amplitude, Mixpanel or Looker.
+- Use Python or R for deeper statistical analysis, including regression and causal inference.
+- Present insights and recommendations to product leadership.
+
+Qualifications
+- 3+ years in product analytics or data analysis.
+- Strong SQL.
+- Experience with experimentation and statistical significance.
+- Experience with a product analytics tool.
+- Excellent communication and stakeholder management.
+
+Preferred: experience in consumer mobile apps, pricing experiments, BigQuery.

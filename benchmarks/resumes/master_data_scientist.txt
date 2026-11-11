@@ -1,0 +1,198 @@
+Jordan Lee
+jordan.lee@example.com | 555-010-3131 | linkedin.com/in/jordanlee-example | Chicago, IL
+
+PROFESSIONAL SUMMARY
+Data scientist with 11 years across retail, logistics, healthcare and banking analytics. Works from messy operational data to models the business actually runs on, with most recent work in forecasting, optimization and experimentation.
+
+TECHNICAL SKILLS
+Languages: Python, SQL, R, SAS, VBA, MATLAB, T-SQL
+ML & Statistics: scikit-learn, XGBoost, PyTorch, statsmodels, Prophet, survival analysis, causal inference, Bayesian methods
+Optimization: PuLP, Gurobi, CPLEX, linear programming, mixed-integer programming, simulation
+Data & Cloud: Spark, Databricks, Snowflake, Teradata, PostgreSQL, SQL Server, AWS SageMaker, Airflow, dbt, MLflow, Docker
+BI: Tableau, Power BI, SSRS, Excel
+
+PROFESSIONAL EXPERIENCE
+
+Senior Data Scientist — Northwind Retail
+March 2022 – Present | Chicago, IL
+• Led an A/B test of inventory allocation changes, analysed in Spark. Replaced a spreadsheet process that took 7 people most of a week.
+• Rebuilt a SQL model for inventory allocation. Replaced a spreadsheet process that took 3 people most of a week.
+• Designed exploratory analysis of markdown pricing drivers in SQL so the pricing leads stopped waiting on IT. The model ran on 7M rows pulled from 7 source systems.
+• Prototyped weekly inventory allocation reports using XGBoost for the merchandising team. Presented results monthly to the pricing director and her staff.
+• Wrote exploratory analysis of store replenishment drivers in Databricks, saving about 8 analyst hours a month. Handed it over with a runbook and a two-page explainer for analysts.
+• Migrated an A/B test of customer churn changes, analysed in Tableau, after three failed vendor attempts. Presented results monthly to the pricing director and her staff.
+• Rebuilt feature tables for inventory allocation in MLflow used in 32 regional reviews each quarter.
+• Rebuilt an A/B test of inventory allocation changes, analysed in Spark. Replaced a spreadsheet process that took 9 people most of a week.
+• Rebuilt an A/B test of basket analysis changes, analysed in PyTorch used in 35 regional reviews each quarter.
+• Led the basket analysis pipeline in Python.
+• Ran exploratory analysis of inventory allocation drivers in SQL, cutting error by 17%. Handed it over with a runbook and a two-page explainer for analysts.
+• Set up the inventory allocation pipeline in Spark. Replaced a spreadsheet process that took 8 people most of a week.
+• Ran an A/B test of markdown pricing changes, analysed in Airflow, for the supply chain team.
+• Retired weekly store replenishment reports using XGBoost. Agreed metric definitions with the risk team before launch.
+• Prototyped a mixed-integer program for basket analysis solved with dbt. Handed it over with a runbook and a two-page explainer for analysts.
+• Rebuilt the basket analysis pipeline in Tableau. The model ran on 58M rows pulled from 4 source systems.
+• Tuned an A/B test of demand forecasting changes, analysed in dbt, saving about 4 analyst hours a month. Agreed metric definitions with the merchandising team before launch.
+• Documented a dbt dashboard tracking inventory allocation for the finance team.
+• Shipped a Tableau job that refreshed inventory allocation inputs nightly, lifting accuracy 9 points over the old rules. Presented results monthly to the risk director and her staff.
+• Prototyped weekly demand forecasting reports using MLflow, which finance adopted for planning.
+• Prototyped the customer churn pipeline in XGBoost used in 14 regional reviews each quarter. Replaced a spreadsheet process that took 5 people most of a week.
+• Wrote a dbt dashboard tracking markdown pricing which finance adopted for planning. Replaced a spreadsheet process that took 5 people most of a week.
+• Led a Python model for store replenishment after three failed vendor attempts. Handed it over with a runbook and a two-page explainer for analysts.
+• Built a SQL dashboard tracking markdown pricing, after three failed vendor attempts. Handed it over with a runbook and a two-page explainer for analysts.
+• Shipped the inventory allocation pipeline in SQL, which finance adopted for planning.
+• Validated the markdown pricing pipeline in Spark for the supply chain team. Presented results monthly to the risk director and her staff.
+• Built exploratory analysis of basket analysis drivers in Tableau used in 13 regional reviews each quarter.
+• Scoped weekly markdown pricing reports using Airflow, which finance adopted for planning. The model ran on 77M rows pulled from 5 source systems.
+• Scoped a mixed-integer program for markdown pricing solved with Airflow. Handed it over with a runbook and a two-page explainer for analysts.
+• Built weekly customer churn reports using MLflow, cutting error by 32%. The model ran on 24M rows pulled from 4 source systems.
+• Prototyped exploratory analysis of customer churn drivers in SQL. Handed it over with a runbook and a two-page explainer for analysts.
+• Built a Databricks dashboard tracking store replenishment, cutting error by 10%.
+Page 1 of 6
+Jordan Lee
+jordan.lee@example.com | 555-010-3131 | linkedin.com/in/jordanlee-example | Chicago, IL
+• Documented a mixed-integer program for customer churn solved with dbt which finance adopted for planning. Replaced a spreadsheet process that took 8 people most of a week.
+• Validated feature tables for markdown pricing in MLflow, after three failed vendor attempts. Agreed metric definitions with the supply chain team before launch.
+
+Data Scientist — Bluefin Logistics
+June 2019 – February 2022 | Dallas, TX
+• Led the carrier selection data quality checks in SQL, lifting accuracy 11 points over the old rules. The model ran on 34M rows pulled from 4 source systems.
+• Migrated a SQL dashboard tracking delivery ETA prediction after three failed vendor attempts. Presented results monthly to the operations director and her staff.
+• Built an A/B test of carrier selection changes, analysed in Power BI used in 24 regional reviews each quarter. Agreed metric definitions with the operations team before launch.
+• Tuned a Power BI model for warehouse slotting. The model ran on 15M rows pulled from 3 source systems.
+• Owned feature tables for carrier selection in Python, lifting accuracy 12 points over the old rules. Handed it over with a runbook and a two-page explainer for analysts.
+• Migrated exploratory analysis of warehouse slotting drivers in Docker. Handed it over with a runbook and a two-page explainer for analysts.
+• Tuned the route optimization pipeline in Gurobi, so the merchandising leads stopped waiting on IT. Handed it over with a runbook and a two-page explainer for analysts.
+• Tuned the fuel cost modelling data quality checks in Gurobi for the pricing team. The model ran on 35M rows pulled from 3 source systems.
+• Migrated a Gurobi dashboard tracking warehouse slotting, reducing stockouts 17%. Agreed metric definitions with the merchandising team before launch.
+• Scoped feature tables for route optimization in Python. Handed it over with a runbook and a two-page explainer for analysts.
+• Wrote the fuel cost modelling data quality checks in Docker. The model ran on 45M rows pulled from 4 source systems.
+• Owned weekly warehouse slotting reports using Power BI, cutting error by 12%. Handed it over with a runbook and a two-page explainer for analysts.
+• Validated the warehouse slotting data quality checks in AWS SageMaker, so the store ops leads stopped waiting on IT. The model ran on 22M rows pulled from 5 source systems.
+• Cut a Gurobi model for warehouse slotting, used in 24 regional reviews each quarter. The model ran on 47M rows pulled from 4 source systems.
+• Ran an A/B test of route optimization changes, analysed in Power BI after three failed vendor attempts. Replaced a spreadsheet process that took 3 people most of a week.
+• Cut the delivery ETA prediction pipeline in scikit-learn, so the operations leads stopped waiting on IT. Presented results monthly to the pricing director and her staff.
+• Documented a mixed-integer program for fuel cost modelling solved with scikit-learn. The model ran on 38M rows pulled from 8 source systems.
+• Scoped weekly fuel cost modelling reports using Python. Replaced a spreadsheet process that took 9 people most of a week.
+• Tuned a PuLP model for route optimization. Handed it over with a runbook and a two-page explainer for analysts.
+• Rebuilt a AWS SageMaker model for carrier selection, after three failed vendor attempts. Presented results monthly to the merchandising director and her staff.
+• Wrote a mixed-integer program for delivery ETA prediction solved with SQL, lifting accuracy 8 points over the old rules. The model ran on 85M rows pulled from 6 source systems.
+• Wrote the delivery ETA prediction data quality checks in SQL.
+• Documented feature tables for fuel cost modelling in Gurobi, so the merchandising leads stopped waiting on IT. Agreed metric definitions with the store ops team before launch.
+• Tuned a Docker dashboard tracking warehouse slotting, reducing stockouts 22%. Replaced a spreadsheet process that took 5 people most of a week.
+• Validated a Python job that refreshed warehouse slotting inputs nightly after three failed vendor attempts. Agreed metric definitions with the supply chain team before launch.
+• Scoped the carrier selection pipeline in SQL, reducing stockouts 20%. Agreed metric definitions with the finance team before launch.
+• Built a Docker dashboard tracking delivery ETA prediction. Handed it over with a runbook and a two-page explainer for analysts.
+• Shipped feature tables for delivery ETA prediction in scikit-learn, used in 28 regional reviews each quarter.
+• Replaced the carrier selection data quality checks in SQL, cutting error by 22%. Handed it over with a runbook and a two-page explainer for analysts.
+• Cut the route optimization data quality checks in Gurobi. Presented results monthly to the finance director and her staff.
+
+Data Analyst II — Maple Health Partners
+August 2017 – May 2019 | Columbus, OH
+• Built the provider scorecards data quality checks in Tableau which finance adopted for planning. Presented results monthly to the pricing director and her staff.
+• Automated a Excel dashboard tracking readmission risk. Presented results monthly to the merchandising director and her staff.
+• Owned a mixed-integer program for claims leakage solved with R, after three failed vendor attempts. Presented results monthly to the operations director and her staff.
+• Migrated a Python dashboard tracking appointment no-shows, reducing stockouts 29%.
+• Automated a Tableau job that refreshed claims leakage inputs nightly, after three failed vendor attempts. Replaced a spreadsheet process that took 4 people most of a week.
+• Retired weekly staffing levels reports using Python, saving about 24 analyst hours a month. The model ran on 4M rows pulled from 8 source systems.
+• Designed the appointment no-shows data quality checks in SAS, reducing stockouts 17%. Handed it over with a runbook and a two-page explainer for analysts.
+Page 2 of 6
+Jordan Lee
+jordan.lee@example.com | 555-010-3131 | linkedin.com/in/jordanlee-example | Chicago, IL
+• Ran weekly staffing levels reports using Excel, reducing stockouts 17%. Handed it over with a runbook and a two-page explainer for analysts.
+• Documented the readmission risk data quality checks in Python for the operations team. Replaced a spreadsheet process that took 3 people most of a week.
+• Ran the staffing levels data quality checks in PostgreSQL after three failed vendor attempts. The model ran on 21M rows pulled from 7 source systems.
+• Ran the appointment no-shows pipeline in PostgreSQL. Replaced a spreadsheet process that took 8 people most of a week.
+• Tuned feature tables for provider scorecards in R.
+• Validated a SAS dashboard tracking provider scorecards which finance adopted for planning. Agreed metric definitions with the risk team before launch.
+• Cut a SAS dashboard tracking staffing levels which finance adopted for planning.
+• Designed the provider scorecards data quality checks in SQL, which finance adopted for planning. Presented results monthly to the operations director and her staff.
+• Scoped an A/B test of appointment no-shows changes, analysed in Excel, which finance adopted for planning.
+• Cut feature tables for claims leakage in PostgreSQL, which finance adopted for planning.
+• Automated weekly appointment no-shows reports using R. Handed it over with a runbook and a two-page explainer for analysts.
+• Shipped exploratory analysis of appointment no-shows drivers in R, cutting error by 7%. Presented results monthly to the supply chain director and her staff.
+• Replaced an A/B test of claims leakage changes, analysed in R, reducing stockouts 33%. Agreed metric definitions with the supply chain team before launch.
+• Tuned the readmission risk pipeline in SQL, lifting accuracy 9 points over the old rules. Replaced a spreadsheet process that took 6 people most of a week.
+• Led feature tables for appointment no-shows in PostgreSQL, saving about 7 analyst hours a month. Replaced a spreadsheet process that took 4 people most of a week.
+• Replaced an A/B test of appointment no-shows changes, analysed in Excel.
+• Shipped the readmission risk pipeline in PostgreSQL, lifting accuracy 16 points over the old rules. Agreed metric definitions with the pricing team before launch.
+
+Data Analyst — Crescent Bank
+July 2015 – July 2017 | Charlotte, NC
+• Rebuilt a Excel model for branch performance.
+• Documented a VBA job that refreshed branch performance inputs nightly. The model ran on 3M rows pulled from 9 source systems.
+• Validated feature tables for fraud alerts in Tableau so the finance leads stopped waiting on IT. Agreed metric definitions with the pricing team before launch.
+• Documented a VBA dashboard tracking fraud alerts which finance adopted for planning. Replaced a spreadsheet process that took 5 people most of a week.
+• Documented the credit line increases data quality checks in SQL, lifting accuracy 9 points over the old rules. Presented results monthly to the supply chain director and her staff.
+• Tuned weekly collections prioritization reports using VBA so the store ops leads stopped waiting on IT. Agreed metric definitions with the pricing team before launch.
+• Ran feature tables for branch performance in Excel, lifting accuracy 16 points over the old rules. The model ran on 21M rows pulled from 5 source systems.
+• Scoped a Excel dashboard tracking credit line increases. Replaced a spreadsheet process that took 8 people most of a week.
+• Ran the collections prioritization pipeline in Tableau, cutting error by 10%. Handed it over with a runbook and a two-page explainer for analysts.
+• Migrated a SQL dashboard tracking credit line increases, which finance adopted for planning. Handed it over with a runbook and a two-page explainer for analysts.
+• Shipped a SQL model for deposit attrition, so the supply chain leads stopped waiting on IT. The model ran on 7M rows pulled from 4 source systems.
+• Migrated a Teradata model for fraud alerts. Replaced a spreadsheet process that took 3 people most of a week.
+• Replaced a VBA model for deposit attrition, after three failed vendor attempts. Presented results monthly to the store ops director and her staff.
+• Cut a mixed-integer program for fraud alerts solved with SQL. Presented results monthly to the merchandising director and her staff.
+• Led feature tables for deposit attrition in Tableau, used in 30 regional reviews each quarter. Presented results monthly to the store ops director and her staff.
+• Tuned the credit line increases data quality checks in SAS.
+• Replaced a SAS job that refreshed fraud alerts inputs nightly, cutting error by 7%.
+• Rebuilt a mixed-integer program for fraud alerts solved with SAS used in 22 regional reviews each quarter.
+• Replaced a Excel dashboard tracking fraud alerts, cutting error by 34%.
+• Documented weekly fraud alerts reports using Tableau so the pricing leads stopped waiting on IT. The model ran on 74M rows pulled from 4 source systems.
+
+Business Intelligence Developer — Orbit Telecom
+January 2014 – June 2015 | Atlanta, GA
+• Automated the network outage reporting data quality checks in T-SQL. The model ran on 26M rows pulled from 3 source systems.
+• Cut a SSRS model for call center KPIs. Presented results monthly to the pricing director and her staff.
+Page 3 of 6
+Jordan Lee
+jordan.lee@example.com | 555-010-3131 | linkedin.com/in/jordanlee-example | Chicago, IL
+• Built a Excel dashboard tracking plan upgrades, used in 32 regional reviews each quarter.
+• Automated a Excel dashboard tracking plan upgrades, for the operations team. Agreed metric definitions with the merchandising team before launch.
+• Shipped a T-SQL job that refreshed call center KPIs inputs nightly. Presented results monthly to the merchandising director and her staff.
+• Tuned a mixed-integer program for network outage reporting solved with Excel. The model ran on 18M rows pulled from 6 source systems.
+• Owned weekly call center KPIs reports using SSIS, used in 20 regional reviews each quarter. Handed it over with a runbook and a two-page explainer for analysts.
+• Designed a SSIS job that refreshed billing reconciliation inputs nightly, so the supply chain leads stopped waiting on IT. The model ran on 25M rows pulled from 6 source systems.
+• Designed feature tables for plan upgrades in SSRS for the merchandising team. Presented results monthly to the operations director and her staff.
+• Led a mixed-integer program for call center KPIs solved with T-SQL. Agreed metric definitions with the pricing team before launch.
+• Designed weekly billing reconciliation reports using SSRS, saving about 32 analyst hours a month. Agreed metric definitions with the finance team before launch.
+• Set up exploratory analysis of call center KPIs drivers in SSRS, cutting error by 18%. Handed it over with a runbook and a two-page explainer for analysts.
+• Retired weekly network outage reporting reports using Excel, so the merchandising leads stopped waiting on IT. Agreed metric definitions with the pricing team before launch.
+• Automated an A/B test of network outage reporting changes, analysed in T-SQL. The model ran on 48M rows pulled from 7 source systems.
+
+Research Assistant — State University Operations Lab
+September 2012 – December 2013 | Columbus, OH
+• Tuned a MATLAB job that refreshed hospital bed scheduling inputs nightly, cutting error by 19%.
+• Led feature tables for queueing simulation in Python. Replaced a spreadsheet process that took 7 people most of a week.
+• Built exploratory analysis of hospital bed scheduling drivers in Python, for the merchandising team. Handed it over with a runbook and a two-page explainer for analysts.
+• Scoped a R model for hospital bed scheduling, so the supply chain leads stopped waiting on IT. Replaced a spreadsheet process that took 7 people most of a week.
+• Documented the inventory policies data quality checks in MATLAB. Presented results monthly to the operations director and her staff.
+• Owned the hospital bed scheduling data quality checks in Python after three failed vendor attempts. The model ran on 84M rows pulled from 3 source systems.
+• Set up an A/B test of inventory policies changes, analysed in CPLEX. Presented results monthly to the finance director and her staff.
+• Wrote a R dashboard tracking inventory policies. The model ran on 43M rows pulled from 4 source systems.
+• Built an A/B test of queueing simulation changes, analysed in MATLAB.
+• Migrated exploratory analysis of hospital bed scheduling drivers in CPLEX. The model ran on 6M rows pulled from 3 source systems.
+
+Analytics Intern — Pioneer Foods
+May 2012 – August 2012 | Cincinnati, OH
+• Designed the promotion lift pipeline in SQL, used in 13 regional reviews each quarter. The model ran on 90M rows pulled from 8 source systems.
+• Led a SQL model for promotion lift. The model ran on 70M rows pulled from 8 source systems.
+• Rebuilt the promotion lift data quality checks in Excel, which finance adopted for planning. Presented results monthly to the operations director and her staff.
+• Owned the promotion lift pipeline in Excel, which finance adopted for planning.
+• Built a SQL model for shelf space used in 36 regional reviews each quarter. Handed it over with a runbook and a two-page explainer for analysts.
+• Rebuilt the shelf space pipeline in Access, cutting error by 38%. Replaced a spreadsheet process that took 4 people most of a week.
+• Tuned a SQL model for promotion lift, lifting accuracy 7 points over the old rules. Handed it over with a runbook and a two-page explainer for analysts.
+• Migrated weekly supplier fill rates reports using Access used in 36 regional reviews each quarter. Agreed metric definitions with the supply chain team before launch.
+
+PROJECTS
+Open-source demand forecasting toolkit — personal project
+2021 – 2023
+• Maintained a small Python package for hierarchical forecasting, with 40 GitHub stars and two outside contributors.
+• Wrote documentation and example notebooks for retail and logistics use cases.
+
+EDUCATION
+MS in Operations Research | State University | 2013
+BS in Mathematics | Lakeview College | 2011
+
+CERTIFICATIONS
+AWS Certified Machine Learning – Specialty — 2021
+Page 6 of 6
