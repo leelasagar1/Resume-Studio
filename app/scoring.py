@@ -84,10 +84,67 @@ def present_keyword_ids(profile: JobProfile, text: str) -> set[str]:
     return {k.id for k in profile.keywords if keyword_hits(k, normalized)}
 
 
+# Words that name no skill on their own. A term made only of these ("ML
+# models", "downstream consumption systems", "external advisory professional
+# services") is job-ad phrasing, not something a recruiter searches for.
+GENERIC_WORDS = {'ml', 'ai', 'data', 'model', 'models', 'pipeline', 'pipelines', 'scaling', 'scalable', 'system',
+                 'systems', 'tool', 'tools', 'platform', 'platforms', 'release', 'releases', 'workflow', 'workflows',
+                 'framework', 'frameworks', 'solution', 'solutions', 'manipulation', 'consumption', 'downstream',
+                 'upstream', 'external', 'internal', 'professional', 'service', 'services', 'advisory', 'frontier',
+                 'family', 'families', 'end', 'to', 'and', 'of', 'the', 'for', 'with', 'technical', 'technology',
+                 'technologies', 'process', 'processes', 'production', 'performance', 'business', 'operational',
+                 'best', 'practices', 'based', 'driven', 'features', 'feature', 'product', 'products', 'results',
+                 'insights', 'reliability', 'efficiency', 'impact', 'value', 'teams', 'team', 'other', 'various',
+                 'related', 'relevant', 'multiple', 'new', 'existing', 'key', 'core', 'large', 'small', 'high',
+                 'library', 'libraries'}
+# A trailing container noun hides the searchable term: "DevOps tools" -> DevOps.
+TRAILING_CONTAINER = {'tools', 'tool', 'families', 'family', 'frameworks', 'platforms', 'platform', 'services',
+                      'technologies', 'stack', 'libraries'}
+# A job title is never a section heading of the ad.
+NOT_A_TITLE = re.compile(r"\b(requirements?|qualifications?|responsibilities|about|overview|description|benefits|"
+                         r"duties|what you|who you|we are|summary|preferred|minimum|basic|skills)\b", re.I)
+# "at least 2 of the following: A, B, C", "such as A, B or C", "e.g. A": any one
+# item satisfies the requirement, so no single item is required.
+OPTION_LIST = re.compile(r"\b(at least (?:\w+|\d+) of|any (?:combination )?of|one or more of|one of the following|"
+                         r"some of|such as|e\.g\.?|eg\b|for example|including but not limited to|or similar|"
+                         r"or equivalent|or other)", re.I)
+
+
+def valid_title(title: str) -> str:
+    title = ' '.join((title or '').split())
+    if not title or len(title.split()) > 8 or NOT_A_TITLE.search(title):
+        return ''
+    return title
+
+
+def option_spans(job_text: str) -> list[str]:
+    """Normalized text of every "any of / such as / e.g." list in the ad."""
+    spans = []
+    for line in job_text.splitlines():
+        # Sentence ends, but not the dots inside "e.g." / "i.e.".
+        for part in re.split(r'(?<=[.;])(?<!e\.g\.)(?<!i\.e\.)\s+', line):
+            match = OPTION_LIST.search(part)
+            if match:
+                spans.append(normalize(part[match.start():]))
+    return [span for span in spans if span]
+
+
 def ground_profile(profile: JobProfile, job_text: str) -> JobProfile:
     """Keep only keywords whose term or alias literally appears in the job text.
     Deduplicate by normalized term and renumber deterministically."""
     normalized_job = normalize(job_text)
+    profile.title = valid_title(profile.title)
+    for keyword in profile.keywords:
+        words = keyword.term.split()
+        # Only a named product or practice survives the trim ("DevOps tools" ->
+        # DevOps); "assistive technologies" must not become "assistive".
+        if (len(words) > 1 and words[-1].lower() in TRAILING_CONTAINER
+                and any(c.isupper() for c in ''.join(words[:-1]))):
+            words = words[:-1]
+            # "Generative AI models and frameworks" -> "Generative AI models", not "... and".
+            while len(words) > 1 and words[-1].lower().strip(',') in ('and', 'or', '&', 'and/or', 'with'):
+                words = words[:-1]
+            keyword.term = ' '.join(words).rstrip(',')
     kept, seen = [], set()
     for keyword in profile.keywords:
         term = normalize(keyword.term)
@@ -117,13 +174,38 @@ def ground_profile(profile: JobProfile, job_text: str) -> JobProfile:
     vague = re.compile(r"^(deploy|develop|design|build|create|ensure|identify|perform|translate|collaborate|communicate|"
                        r"support|drive|deliver|lead|manage|maintain|work|use|apply|guide|uphold|leverage)\b|"
                        r"\b(solutions?|experiences?|approach|domains?|needs|requirements?|standards|outcomes?|"
-                       r"excellence|innovation|readiness|strategy|initiatives?|mindset)$", re.I)
+                       r"excellence|innovation|readiness|strategy|initiatives?|mindset|expertise|techniques|practices|"
+                       r"technologies|capabilities)$|"
+                       # "robust models", "rigorous validation", "advanced statistical": a
+                       # quality claim wrapped around a skill, not a term a recruiter searches.
+                       r"^(robust|rigorous|advanced|strong|solid|proven|excellent|effective|reliable|"
+                       r"high[- ]quality|innovative|complex|cutting[- ]edge|modern|sound|best)\b|"
+                       # "decision-driven", "data-informed": adjectives, not skills.
+                       r"-(driven|informed|focused|oriented|minded)$", re.I)
+    # One generic word ("engineering", "product", "reliability") matches almost
+    # any resume by accident and names no skill.
+    generic = {'engineering', 'product', 'products', 'reliability', 'scalability', 'quality', 'performance',
+               'efficiency', 'accuracy', 'impact', 'business', 'technology', 'operations', 'research',
+               'analysis', 'execution', 'delivery', 'data', 'systems', 'models', 'insights', 'results',
+               'engineer', 'science', 'software', 'tools', 'teams', 'customers', 'growth', 'value',
+               'statistical', 'analytical', 'technical', 'quantitative', 'scalable', 'robust', 'advanced'}
+    options = option_spans(job_text)
+    outside_options = normalized_job
+    for span in options:
+        outside_options = outside_options.replace(span, ' ')
     for index, keyword in enumerate(kept, 1):
         keyword.id = f'K{index}'
+        # Listed only as one alternative among several: preferred, not required.
+        if (keyword.priority == 'required'
+                and any(count_occurrences(v, span) for span in options for v in variants(keyword))
+                and not any(count_occurrences(v, outside_options) for v in variants(keyword))):
+            keyword.priority = 'preferred'
         if credential.search(keyword.term):
             keyword.kind = 'credential'
             continue
-        if softish.search(keyword.term) or (vague.search(keyword.term) and keyword.kind != 'tool'):
+        if (softish.search(keyword.term) or (vague.search(keyword.term) and keyword.kind != 'tool')
+                or normalize(keyword.term) in generic
+                or all(w in GENERIC_WORDS for w in normalize(keyword.term).split())):
             keyword.kind = 'soft'
             continue
         # A term that appears only inside a degree-field list ("Master's degree in
@@ -187,6 +269,11 @@ def score_resume(profile: JobProfile, text: str) -> dict:
     if not required:
         preferred_points += required_points
         required_points = 0
+    if not profile.title:
+        # No usable title in the ad: its points go to the required keywords
+        # rather than capping every resume at 90.
+        required_points += TITLE_POINTS if required else 0
+        preferred_points += TITLE_POINTS if not required else 0
     fraction = lambda rows_: (sum(r['matched'] for r in rows_) / len(rows_)) if rows_ else 0
     title_points, title_reason = title_score(profile.title, normalized)
     format_points, format_missing = format_score(text)
@@ -195,7 +282,7 @@ def score_resume(profile: JobProfile, text: str) -> dict:
                               'matched': sum(r['matched'] for r in required), 'total': len(required)},
         'preferred_keywords': {'earned': round(preferred_points * fraction(preferred), 1), 'available': preferred_points,
                                'matched': sum(r['matched'] for r in preferred), 'total': len(preferred)},
-        'job_title': {'earned': title_points, 'available': TITLE_POINTS, 'reason': title_reason},
+        'job_title': {'earned': title_points, 'available': TITLE_POINTS if profile.title else 0, 'reason': title_reason},
         'format': {'earned': format_points, 'available': FORMAT_POINTS, 'missing': format_missing},
     }
     total = round(sum(c['earned'] for c in components.values()), 1)

@@ -86,13 +86,52 @@ def is_list_line(text: str) -> bool:
     return text.count(',') >= 5 and text.count(',') * 4 >= len(text.split())
 
 
+PAGE_NUMBER = re.compile(r'^\s*(?:page\s*)?[-–—]?\s*\d{1,3}\s*(?:(?:of|/)\s*\d{1,3})?\s*[-–—]?\s*$', re.I)
+
+
+def strip_page_furniture(text: str) -> str:
+    """A multi-page resume exported to PDF repeats its header (name, contact)
+    on every page and adds page numbers. Keep the first header, drop the
+    repeats and the page numbers, so page 3 does not become a new section."""
+    lines = text.splitlines()
+    header = {' '.join(l.split()).lower() for l in [l for l in lines if l.strip()][:3]}
+    kept, seen_header = [], set()
+    for line in lines:
+        key = ' '.join(line.split()).lower()
+        if key and PAGE_NUMBER.match(line):
+            continue
+        if key in header:
+            if key in seen_header:
+                continue
+            seen_header.add(key)
+        kept.append(line)
+    return '\n'.join(kept)
+
+
+BULLET_MARK = re.compile(r'^\s*[-*•●▪◦‣■□➢►➤–]\s+')
+
+
 def clean_markdown(text: str) -> str:
     lines = []
     for line in text.splitlines():
         stripped = re.sub(r'^\s*#{1,6}\s*', '', line)
-        stripped = re.sub(r'^\s*[-*•]\s+', '', stripped)
+        stripped = BULLET_MARK.sub('', stripped)
         lines.append(stripped)
     return '\n'.join(lines)
+
+
+def bullet_evidence_ids(text: str) -> set[str]:
+    """E ids (numbered as make_evidence numbers non-blank lines) of lines that
+    carried a bullet marker. Short bullets ("Built the churn model.") would
+    otherwise look like project or section names."""
+    ids, number = set(), 0
+    for line in text.splitlines():
+        if not clean_markdown(line).strip():
+            continue
+        number += 1
+        if BULLET_MARK.match(line):
+            ids.add(f'E{number}')
+    return ids
 
 
 def is_heading(text: str, index: int) -> bool:
@@ -122,7 +161,7 @@ def split_dated(text: str):
     return clean(text[:match.start()].rstrip(' ,|-–—\t')), clean(text[match.start():])
 
 
-def parse_resume(evidence: dict) -> Skeleton:
+def parse_resume(evidence: dict, bullet_ids: frozenset = frozenset()) -> Skeleton:
     items = list(evidence.items())
     name = SourceLine(eid=items[0][0], text=clean(items[0][1]))
     headline, contact = None, []
@@ -160,11 +199,12 @@ def parse_resume(evidence: dict) -> Skeleton:
                        and (DATE_RANGE.search(last_entry.detail.text) or SINGLE_DATE.search(last_entry.detail.text)
                             or TRAILING_YEAR.match(last_entry.heading.text + '  ' + last_entry.detail.text)))
         if (under_dated and not text.isupper() and len(text.split()) <= 5 and not LABEL_LINE.match(text)
-                and not DATE_RANGE.search(text) and not re.search(r'\d', text)):
+                and not DATE_RANGE.search(text) and not re.search(r'\d', text)
+                and eid not in bullet_ids and not text.rstrip().endswith('.')):
             # "George Mason University" right under "Master in Data Analytics Engineering  2024"
             last_entry.detail = SourceLine(eid=last_entry.detail.eid, text=last_entry.detail.text + ' | ' + clean(text))
             continue
-        if is_heading(text, position):
+        if is_heading(text, position) and eid not in bullet_ids:
             current = new_section(text.strip(' :'))
             pending_heading = None
             continue
@@ -191,12 +231,13 @@ def parse_resume(evidence: dict) -> Skeleton:
         if current.kind in ('summary', 'skills'):
             current.lines.append(line)
             continue
-        if dated:
+        if dated and eid not in bullet_ids:
             entry_counter += 1
             heading_text, detail_text = split_dated(text)
             if detail_text is None and trailing:
                 heading_text, detail_text = clean(trailing.group(1)), clean(trailing.group(2))
-            if detail_text is None and pending_heading is not None and len(text.split()) <= 6:
+            starts_with_date = bool(re.match(r'^\W*(' + MONTH + r')', plain, re.I))
+            if detail_text is None and pending_heading is not None and (len(text.split()) <= 6 or starts_with_date):
                 # "Data Analyst | Harbor Analytics" on one line, "2022 - Present" on the next.
                 entry = SkeletonEntry(id=f'e{entry_counter}', heading=pending_heading,
                                       detail=SourceLine(eid=eid, text=clean(text)), bullets=[])
@@ -210,7 +251,11 @@ def parse_resume(evidence: dict) -> Skeleton:
             continue
         last = current.entries[-1] if current.entries else None
         just_after_heading = last is not None and not last.bullets and last.heading.eid != eid
-        if len(text.split()) >= BULLET_WORDS:
+        # A short sentence under a dated role is a bullet, not a project name:
+        # it was marked as one, or it ends like a sentence.
+        short_bullet = (last is not None and (last.detail is not None or last.bullets)
+                        and (eid in bullet_ids or (text.rstrip().endswith('.') and len(text.split()) >= 3)))
+        if len(text.split()) >= BULLET_WORDS or short_bullet:
             if last is not None and not is_list_line(text):
                 last.bullets.append(line)
             # a long line with no entry above it is prose we cannot place; ignored

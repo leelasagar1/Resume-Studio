@@ -22,12 +22,14 @@
         <div class="panel-heading"><h2 id="input-title">The starting point</h2><span class="small-label">01 / INPUTS</span></div>
         <form id="resume-form">
           <div class="field-heading"><label for="resume-text">Your resume</label><label class="upload-button" for="resume-file"><span aria-hidden="true">↑</span> Upload file<input id="resume-file" type="file" accept=".pdf,.docx,.txt"></label></div>
-          <p class="field-help" id="resume-help">Paste your resume or upload PDF, DOCX, or TXT. Up to 5 MB.</p>
-          <textarea id="resume-text" aria-describedby="resume-help" placeholder="Your name, experience, projects, education, and skills…" maxlength="16000" minlength="80" required></textarea>
+          <p class="field-help" id="resume-help">Paste your resume or upload PDF, DOCX, or TXT. Up to 5 MB. A long master resume works: the most relevant work is selected for this job.</p>
+          <textarea id="resume-text" aria-describedby="resume-help" placeholder="Your name, experience, projects, education, and skills…" maxlength="60000" minlength="80" required></textarea>
           <p class="file-status" id="resume-file-status" aria-live="polite"></p>
           <div class="field-heading job-heading"><label for="job-text">Job description</label><label class="upload-button" for="job-file"><span aria-hidden="true">↑</span> Upload file<input id="job-file" type="file" accept=".pdf,.docx,.txt"></label></div>
-          <textarea id="job-text" placeholder="Paste the role’s responsibilities and qualifications…" maxlength="14000" minlength="80" required></textarea>
+          <textarea id="job-text" placeholder="Paste the role’s responsibilities and qualifications…" maxlength="20000" minlength="80" required></textarea>
           <p class="file-status" id="job-file-status" aria-live="polite"></p>
+          <label for="target-title" class="title-label">Target job title <span>Optional. Use it when the posting does not start with the title.</span></label>
+          <input id="target-title" type="text" maxlength="120" placeholder="e.g. Senior Data Scientist" autocomplete="off">
           <details class="additional"><summary>Anything your resume leaves out? <span>Optional</span></summary><label for="facts" class="sr-only">Additional confirmed experience</label><textarea id="facts" maxlength="4000" placeholder="Add real projects, tools you’ve used, or results you can substantiate. Distinguish personal projects from professional work."></textarea></details>
           <fieldset class="model-settings"><legend>Generation model</legend>
             <label for="provider">Provider</label><select id="provider" required aria-describedby="model-help"><option value="">Loading providers…</option></select>

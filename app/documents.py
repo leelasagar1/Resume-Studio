@@ -8,6 +8,7 @@ from pypdf import PdfReader
 from .models import Resume, claims, proposed_claims, skill_items
 
 MAX_FILE = 5 * 1024 * 1024
+MAX_TEXT = 60000  # a multi-page master resume; matches the request limit
 
 
 def extract_text(filename: str, data: bytes) -> str:
@@ -34,7 +35,11 @@ def extract_text(filename: str, data: bytes) -> str:
                 parts.extend(p.text for p in section.header.paragraphs)
             for block in doc.iter_inner_content():
                 if isinstance(block, Paragraph):
-                    parts.append(block.text)
+                    # Word keeps list bullets as formatting, not text; mark them so
+                    # a short bullet is not mistaken for a heading.
+                    ppr = block._p.pPr
+                    listed = (ppr is not None and ppr.numPr is not None) or 'list' in (getattr(block.style, 'name', '') or '').lower()
+                    parts.append(('• ' if listed and block.text.strip() else '') + block.text)
                 elif isinstance(block, Table):
                     parts.extend(' | '.join(c.text for c in row.cells) for row in block.rows)
             for section in doc.sections:
@@ -46,8 +51,8 @@ def extract_text(filename: str, data: bytes) -> str:
             pdf = PdfReader(io.BytesIO(data))
             if pdf.is_encrypted:
                 raise ValueError('Upload an unencrypted PDF or a DOCX file.')
-            if len(pdf.pages) > 12:
-                raise ValueError('Use a PDF of at most 12 pages.')
+            if len(pdf.pages) > 25:
+                raise ValueError('Use a PDF of at most 25 pages.')
             text = '\n'.join(page.extract_text() or '' for page in pdf.pages)
         else:
             raise ValueError('Supported formats: PDF, DOCX, and UTF-8 TXT.')
@@ -58,7 +63,7 @@ def extract_text(filename: str, data: bytes) -> str:
     text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', text).strip()
     if len(text) < 40:
         raise ValueError('Not enough text could be extracted. For scanned PDFs, paste the text or upload DOCX.')
-    if len(text) > 20000:
+    if len(text) > MAX_TEXT:
         raise ValueError('The file contains too much text. Use a shorter document or paste the relevant text.')
     return text
 

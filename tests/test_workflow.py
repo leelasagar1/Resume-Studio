@@ -322,7 +322,7 @@ def test_propose_step_targets_required_keywords_absent_from_experience():
     assert added == 0, 'names Northstar Labs and Lakeside University, which belong to other entries'
 
     j2 = sloppy_draft.sections[0].entries[1].bullets
-    assert [b.id for b in j2] == ['j2b1', 'j2p1', 'j2p2', 'j2p3'] and all(b.proposed for b in j2[1:])
+    assert [b.id for b in j2] == ['j2b1'] + [f'j2p{n}' for n in range(1, MAX_PROPOSED_PER_ROLE + 1)] and all(b.proposed for b in j2[1:])
     assert j2[1].evidence_ids == ['E8'], 'invalid context ids fall back to the entry heading evidence'
     assert validate_draft(draft, evidence, profile) == []
 
@@ -535,12 +535,34 @@ def test_workflow_reaches_target_and_asks_to_confirm_unevidenced_skills():
 def test_writer_receives_missing_keywords_and_factual_issues_on_revision():
     weak = sample_draft(0)
     weak.sections[1].skill_groups = [weak.sections[1].skill_groups[0]]  # no unevidenced additions
-    provider = NoProposals(drafts=[weak, sample_draft(1)], audits=[{'s1': False}, {}])
+    revised = sample_draft(1)
+    # Verdicts are cached by text, so the revision must actually reword s1.
+    revised.summary[0].text = 'Data Analyst with SQL reporting and Python automation experience across Harbor Analytics and Northstar Labs, focused on operations reporting.'
+    provider = NoProposals(drafts=[weak, revised], audits=[{'s1': False}, {}])
     result = asyncio.run(run_workflow(request(max_revisions=1), provider, silent))
     feedback = provider.write_calls[1]['feedback']
-    assert {m['term'] for m in feedback['missing_keywords']} >= {'Airflow'}
+    # Unevidenced job skills are offered in Skills for confirmation right away,
+    # so the revision is driven by the factual issue, not by a missing keyword.
+    assert 'Airflow' in result['unverified_terms']
+    assert 'Airflow' not in {m['term'] for m in feedback['missing_keywords']}
     assert feedback['factual_issues'] and feedback['factual_issues'][0].startswith('s1:')
     assert result['selected_version'] == 1 and result['report']['score'] == 100
+
+
+def test_unchanged_claims_are_not_audited_again():
+    revised = sample_draft(1)
+    revised.summary[0].text = 'Data Analyst with SQL reporting and Python automation experience across Harbor Analytics and Northstar Labs, focused on operations reporting.'
+    seen = []
+
+    class Recording(NoProposals):
+        async def audit(self, evidence, claims_to_audit, eligibility_rules, proposed=()):
+            seen.append(({c.id for c in claims_to_audit}, len(eligibility_rules)))
+            return await super().audit(evidence, claims_to_audit, eligibility_rules, proposed)
+    provider = Recording(drafts=[sample_draft(1), revised], audits=[{'s1': False}, {}])
+    asyncio.run(run_workflow(request(max_revisions=1), provider, silent))
+    # Round 2 sends only the reworded claim; headings and date lines are never audited.
+    assert seen[1][0] == {'s1'}
+    assert not any(cid in ids for ids, _ in seen for cid in ('j1', 'j1d', 'j2', 'j2d', 'name', 'c1'))
 
 
 def test_unsupported_statements_are_stripped_when_revisions_run_out():
@@ -666,7 +688,7 @@ def test_source_groups_fold_into_similar_writer_groups_and_group_cap():
     assert summary_issues(draft, evidence, sample_profile()) == []
     draft.summary = [draft.summary[0].model_copy(update={'text': ' '.join(['word'] * 45)})]
     issues = summary_issues(draft, evidence, sample_profile())
-    assert any('single sentence' in i for i in issues) and any('must name the role' in i for i in issues) and any('job keyword' in i for i in issues)
+    assert any('single sentence' in i for i in issues) and any('must name what the candidate is' in i for i in issues) and any('job keyword' in i for i in issues)
     draft = sample_draft(1)
     draft.summary[0].text = 'Leveraged SQL and Python at Harbor Analytics as a Data Analyst delivering weekly operations reviews.'
     issues = summary_issues(draft, evidence, sample_profile())
@@ -738,15 +760,15 @@ def test_bullet_standards_and_role_floor():
                                    evidence_ids=['E3'], proposed=False))
     draft, removed = trim_bullets(draft, profile)
     ids = [b.id for b in entry.bullets]
-    assert len(ids) == MAX_BULLETS and removed == 2
+    assert len(ids) == MAX_BULLETS and removed == 9 - MAX_BULLETS
     assert 'j1p1' in ids and 'j1b1' in ids and 'j1b2' in ids and 'j1b3' in ids
-    assert sum(i.startswith('f') for i in ids) == 3
+    assert sum(i.startswith('f') for i in ids) == MAX_BULLETS - 4
     # never trims evidence bullets below the floor even when over the cap
     entry.bullets += [Claim(id='q1', text='Coordinated the quarterly volunteer day and ordered supplies for the analytics floor.', evidence_ids=['E3'], proposed=False)]
     for n in range(3):
         entry.bullets.append(Claim(id=f'p{n}', text=f'Proposed responsibility number {n} covering an unevidenced job keyword for confirmation.', evidence_ids=['E3'], proposed=True))
     draft, removed = trim_bullets(draft, profile)
-    assert removed == 2 and sum(not b.proposed for b in entry.bullets) == 5
+    assert removed == MAX_BULLETS - 5 and sum(not b.proposed for b in entry.bullets) == 5
 
 
 def test_failed_repair_falls_back_to_full_rewrite():
@@ -763,37 +785,76 @@ def test_failed_repair_falls_back_to_full_rewrite():
     assert result['history'][0]['audited'] is False and result['selected_version'] == 1
 
 
-def test_best_version_is_kept_when_a_revision_regresses():
+def below_target(draft):
+    """Airflow missing and nothing offered: below a 100 target."""
+    draft.sections[1].skill_groups[1].items.pop()
+    return draft
+
+
+class NeedsExcel(NoProposals):
+    """Excel is a required job skill the candidate's evidence has (Skills line)
+    but no bullet shows, so another writing round can still close it."""
+    async def profile(self, job_text):
+        profile = sample_profile()
+        profile.keywords.append(Keyword(id='K9', term='Excel', aliases=[], kind='tool', priority='required'))
+        return profile
+
+
+def excel_request(**kwargs):
+    return GenerateRequest(resume_text=SAMPLE_RESUME, job_text=SAMPLE_JOB + '\nExcel is required.', confirmed=True, **kwargs)
+
+
+@pytest.fixture
+def no_offer(monkeypatch):
+    monkeypatch.setattr('app.workflow.offer_missing_skills', lambda resume, evidence, profile: (resume, 0))
+
+
+def test_nothing_left_to_gain_stops_after_one_round(no_offer):
+    first = sample_draft(1)
+    first.sections[1].skill_groups[1].items.pop()  # Airflow: not in the evidence
+    provider = NoProposals(drafts=[first, sample_draft(1)])
+    result = asyncio.run(run_workflow(request(max_revisions=2, target_score=100), provider, silent))
+    assert len(provider.write_calls) == 1 and 'your evidence supports is in place' in result['stop_reason']
+
+
+def test_missing_unevidenced_skills_are_offered_for_confirmation():
+    from app.workflow import offer_missing_skills
+    draft = sample_draft(0)
+    draft.sections[1].skill_groups = [draft.sections[1].skill_groups[0]]
+    draft, added = offer_missing_skills(draft, make_evidence(SAMPLE_RESUME), sample_profile())
+    offered = [i.text for g in draft.sections[1].skill_groups for i in g.items if not i.evidence_ids]
+    # Required first; Docker is already in a (proposed) bullet, so it is not offered twice.
+    assert added == 3 and offered == ['Dashboards', 'Data quality', 'Airflow']
+
+
+def test_best_version_is_kept_when_a_revision_regresses(no_offer):
     worse = sample_draft(1)
     worse.sections[1].skill_groups = [worse.sections[1].skill_groups[0]]
     worse.sections[0].entries[0].bullets = [b for b in worse.sections[0].entries[0].bullets if not b.proposed]
     worse.summary[0].text = 'Data analyst.'
-    first = sample_draft(0)
-    first.sections[1].skill_groups[1].items.pop()  # Airflow missing: below the 100 target
-    provider = NoProposals(drafts=[first, worse])
-    result = asyncio.run(run_workflow(request(max_revisions=1, target_score=100), provider, silent))
+    first = below_target(sample_draft(0))
+    provider = NeedsExcel(drafts=[first, worse])
+    result = asyncio.run(run_workflow(excel_request(max_revisions=1, target_score=100), provider, silent))
     assert result['selected_version'] == 0
     assert result['history'][1]['score'] < result['history'][0]['score']
 
 
-def test_stops_when_a_revision_barely_moves_the_score():
-    first = sample_draft(0)
-    first.sections[1].skill_groups[1].items.pop()  # Airflow missing: 92.5, below the 100 target
-    provider = NoProposals(drafts=[first, first.model_copy(deep=True), sample_draft(1)])
-    result = asyncio.run(run_workflow(request(max_revisions=2, target_score=100), provider, silent))
+def test_stops_when_a_revision_barely_moves_the_score(no_offer):
+    first = below_target(sample_draft(0))
+    provider = NeedsExcel(drafts=[first, first.model_copy(deep=True), sample_draft(1)])
+    result = asyncio.run(run_workflow(excel_request(max_revisions=2, target_score=100), provider, silent))
     assert len(result['history']) == 2 and 'would not raise the score' in result['stop_reason']
 
 
-def test_budget_keeps_only_audited_version():
-    class Budgeted(NoProposals):
+def test_budget_keeps_only_audited_version(no_offer):
+    class Budgeted(NeedsExcel):
         async def write(self, *args, **kwargs):
             if self.write_calls:
                 raise BudgetExceeded('budget')
             return await super().write(*args, **kwargs)
-    first = sample_draft(0)
-    first.sections[1].skill_groups[1].items.pop()
+    first = below_target(sample_draft(0))
     provider = Budgeted(drafts=[first])
-    result = asyncio.run(run_workflow(request(max_revisions=2, target_score=100), provider, silent))
+    result = asyncio.run(run_workflow(excel_request(max_revisions=2, target_score=100), provider, silent))
     assert 'token budget' in result['stop_reason'] and result['selected_version'] == 0
 
 
@@ -899,9 +960,10 @@ def test_audit_runs_in_parallel_chunks_with_rules_once(monkeypatch):
     provider = OpenAIProvider()
     claims = [SimpleNamespace(model_dump=lambda i=i: {'id': f'c{i}'}) for i in range(45)]
     merged = asyncio.run(provider.audit({'E1': 'x'}, claims, [EligibilityRule(id='L1', text='r', kind='years')]))
-    assert len(calls) == 2 and '"eligibility_rules":[{' in calls[0] and '"eligibility_rules":[]' in calls[1]
-    assert '"proposed_claims":[]' in calls[1]
-    assert merged.questions == ['q', 'q']
+    # 45 claims in chunks of 12, plus one call for proposals and eligibility rules.
+    assert len(calls) == 5 and all('"eligibility_rules":[]' in c for c in calls[:4])
+    assert '"eligibility_rules":[{' in calls[4] and '"claims_to_audit":[]' in calls[4]
+    assert merged.questions == ['q'] * 5
 
 
 def test_budget_prevents_provider_dispatch(monkeypatch):
@@ -911,3 +973,155 @@ def test_budget_prevents_provider_dispatch(monkeypatch):
     with pytest.raises(BudgetExceeded):
         asyncio.run(provider.profile(SAMPLE_JOB))
     assert provider.calls == 0
+
+
+def test_qualities_and_generic_words_are_not_scored():
+    job = ('Build robust models with rigorous validation and domain expertise. Decision-driven engineering '
+           'for product reliability. Requires deep learning, mathematical optimization and Spark.')
+    terms = ['robust models', 'rigorous validation', 'domain expertise', 'decision-driven', 'engineering',
+             'product', 'reliability', 'deep learning', 'mathematical optimization', 'Spark']
+    profile = JobProfile(title='Data Scientist', keywords=[keyword(f'K{i}', t, kind='tool' if t == 'Spark' else 'method')
+                                                           for i, t in enumerate(terms)],
+                         eligibility=[], responsibilities=[])
+    kinds = {k.term: k.kind for k in ground_profile(profile, job).keywords}
+    assert {t for t, k in kinds.items() if k != 'soft'} == {'deep learning', 'mathematical optimization', 'Spark'}
+
+
+def test_summary_never_claims_a_seniority_the_evidence_lacks():
+    from app.workflow import demote_unheld_title
+    evidence = {'E1': 'Associate Data Scientist — Sosio Technologies'}
+    profile = JobProfile(title='Senior Data Scientist', keywords=[], eligibility=[], responsibilities=[])
+    draft = sample_draft(0)
+    draft.summary[0].text = 'Senior Data Scientist with 5+ years of experience in NLP.'
+    assert demote_unheld_title(draft, evidence, profile).summary[0].text == 'Data Scientist with 5+ years of experience in NLP.'
+    # A held title is left alone.
+    draft.summary[0].text = 'Senior Data Scientist with 5+ years.'
+    held = {'E1': 'Senior Data Scientist — Acme'}
+    assert demote_unheld_title(draft, held, profile).summary[0].text == 'Senior Data Scientist with 5+ years.'
+
+
+def test_section_heading_is_never_the_job_title_and_its_points_move_to_keywords():
+    from app.scoring import valid_title
+    assert valid_title('MINIMUM REQUIREMENTS') == '' and valid_title('About the role') == ''
+    assert valid_title('Senior Data Scientist') == 'Senior Data Scientist'
+    profile = JobProfile(title='', keywords=[keyword('K1', 'SQL')], eligibility=[], responsibilities=[])
+    result = score_resume(profile, 'Experience\nEducation\nSkills: SQL\nme@x.com 555-010-2000')
+    assert result['score'] == 100 and result['components']['job_title']['available'] == 0
+
+
+def test_alternatives_in_an_any_of_list_are_preferred_not_required():
+    job = ('Must have Python and SQL.\nMust have 2 years using at least 2 of the following: OpenAI family, '
+           'LlamaIndex, Langchain, Anthropic.\nExperience with cloud platforms such as AWS or Azure.')
+    terms = ['Python', 'SQL', 'OpenAI', 'LlamaIndex', 'Langchain', 'Anthropic', 'AWS', 'Azure']
+    profile = JobProfile(title='ML Engineer', keywords=[keyword(f'K{i}', t) for i, t in enumerate(terms)],
+                         eligibility=[], responsibilities=[])
+    priority = {k.term: k.priority for k in ground_profile(profile, job).keywords}
+    assert priority['Python'] == priority['SQL'] == 'required'
+    assert {t for t, p in priority.items() if p == 'preferred'} == {'OpenAI', 'LlamaIndex', 'Langchain', 'Anthropic', 'AWS', 'Azure'}
+
+
+def test_job_ad_phrasing_is_not_scored_and_container_nouns_are_trimmed():
+    job = ('Build ML models and pipelines for downstream consumption systems. Use DevOps tools and '
+           'external advisory professional services. Data engineering and containerization required.')
+    terms = ['ML models', 'pipelines', 'downstream consumption systems', 'DevOps tools',
+             'external advisory professional services', 'data engineering', 'containerization']
+    profile = JobProfile(title='ML Engineer', keywords=[keyword(f'K{i}', t, kind='method') for i, t in enumerate(terms)],
+                         eligibility=[], responsibilities=[])
+    scored = {k.term for k in ground_profile(profile, job).keywords if k.kind != 'soft'}
+    assert scored == {'DevOps', 'data engineering', 'containerization'}
+
+
+def test_skill_names_are_not_taken_from_inflected_prose():
+    from app.workflow import inflection_of
+    assert inflection_of('containerized', 'containerization') and inflection_of('data engineer', 'data engineering')
+    assert not inflection_of('pytorch', 'torch') and not inflection_of('dashboards', 'dashboard')
+
+
+def test_an_alternatively_rule_is_either_or_with_the_rule_before_it():
+    from app.workflow import evaluate, eligibility_groups
+    rules = [EligibilityRule(id='L1', text="Bachelor's degree and 5 years of experience.", kind='degree'),
+             EligibilityRule(id='L2', text="Alternatively, a Master's degree and 4 years of experience.", kind='degree'),
+             EligibilityRule(id='L3', text='4 years of Python.', kind='years')]
+    assert eligibility_groups(rules) == [['L1', 'L2'], ['L3']]
+    profile = sample_profile()
+    profile.eligibility = rules
+    audit = Audit(claim_checks=[], proposal_checks=[], questions=[], eligibility=[
+        EligibilityCheck(rule_id='L1', status='unmet', reason='r'), EligibilityCheck(rule_id='L2', status='met', reason='r'),
+        EligibilityCheck(rule_id='L3', status='met', reason='r')])
+    report = evaluate(profile, sample_draft(1), audit, [])
+    assert report['eligible'] and next(e for e in report['eligibility'] if e['id'] == 'L2')['alternative_to'] == 'L1'
+
+
+def test_page_headers_and_numbers_of_a_multi_page_resume_are_removed():
+    from app.skeleton import strip_page_furniture
+    text = ('Alex Morgan\nalex@example.com | 555-010-2000\nData Analyst | Harbor Analytics\nBuilt SQL reports.\n'
+            'Page 1 of 3\nAlex Morgan\nalex@example.com | 555-010-2000\nAutomated reports with Python.\n2\n')
+    assert strip_page_furniture(text).splitlines() == [
+        'Alex Morgan', 'alex@example.com | 555-010-2000', 'Data Analyst | Harbor Analytics',
+        'Built SQL reports.', 'Automated reports with Python.']
+
+
+def test_long_resume_calls_see_only_the_lines_they_need(monkeypatch):
+    from app.agents import relevant_lines
+    profile = sample_profile()
+    lines = [{'eid': f'E{i}', 'text': f'Organized offsite number {i} for the team.'} for i in range(20)]
+    lines[15] = {'eid': 'E15', 'text': 'Built Tableau dashboards on SQL data.'}
+    picked = relevant_lines(lines, profile, 5)
+    assert len(picked) == 5 and lines[15] in picked and picked == sorted(picked, key=lambda l: int(l['eid'][1:]))
+    contexts = []
+
+    async def create(**kwargs):
+        contexts.append(kwargs['input'][1]['content'] if len(kwargs['input']) > 2 else kwargs['input'][0]['content'])
+        return SimpleNamespace(output_text=Audit(claim_checks=[], proposal_checks=[], eligibility=[], questions=[]).model_dump_json(),
+                               status='completed', usage=SimpleNamespace(total_tokens=1))
+    monkeypatch.setattr('app.agents.AsyncOpenAI', lambda **kwargs: SimpleNamespace(responses=SimpleNamespace(create=create)))
+    provider = OpenAIProvider()
+    evidence = {f'E{i}': f'line {i}' for i in range(200)}
+    claim = Claim(id='b1', text='Built things.', evidence_ids=['E7'], proposed=False)
+    asyncio.run(provider.audit(evidence, [claim], []))
+    sent = ' '.join(contexts)
+    assert '"E7":"line 7"' in sent and '"E8":' not in sent
+
+
+def test_master_resume_layout_parses_with_short_bullets_and_page_breaks():
+    from app.skeleton import bullet_evidence_ids, clean_markdown, parse_resume, strip_page_furniture
+    text = ('Jordan Lee\njordan@example.com | 555-010-3131\n\nPROFESSIONAL EXPERIENCE\n'
+            'Senior Data Scientist — Northwind Retail\nMarch 2022 – Present | Chicago, IL\n'
+            '• Wrote a SQL model for inventory allocation.\n• Built the churn model.\nPage 1 of 2\n'
+            'Jordan Lee\njordan@example.com | 555-010-3131\n'
+            '• Tuned the markdown pricing optimizer with Gurobi for 400 stores each week.\n'
+            'Analytics Intern — Pioneer Foods\nMay 2012 – August 2012 | Cincinnati, OH\n'
+            '• Measured promotion lift.\n')
+    marked = strip_page_furniture(text)
+    evidence = make_evidence(clean_markdown(marked))
+    skeleton = parse_resume(evidence, frozenset(bullet_evidence_ids(marked)))
+    entries = [e for s in skeleton.sections for e in s.entries]
+    assert [(e.heading.text, e.detail.text, len(e.bullets)) for e in entries] == [
+        ('Senior Data Scientist — Northwind Retail', 'March 2022 – Present | Chicago, IL', 3),
+        ('Analytics Intern — Pioneer Foods', 'May 2012 – August 2012 | Cincinnati, OH', 1)]
+
+
+def test_roles_older_than_ten_years_are_condensed():
+    from app.workflow import bullet_range, OLD_ROLE_BULLETS, MIN_BULLETS, MAX_BULLETS
+    from types import SimpleNamespace as NS
+    old = NS(heading=NS(text='Analytics Intern — Pioneer Foods'), detail=NS(text='May 2012 – August 2012'))
+    recent = NS(heading=NS(text='Data Analyst | Harbor Analytics'), detail=NS(text='2022 - Present'))
+    assert bullet_range(old) == OLD_ROLE_BULLETS and bullet_range(recent) == (MIN_BULLETS, MAX_BULLETS)
+
+
+def test_an_empty_job_extraction_is_retried():
+    class Misfire(NoProposals):
+        calls = 0
+
+        async def profile(self, job_text):
+            Misfire.calls += 1
+            if Misfire.calls == 1:
+                return JobProfile(title='', keywords=[], eligibility=[], responsibilities=[])
+            return await super().profile(job_text)
+    result = asyncio.run(run_workflow(request(), Misfire(), silent))
+    assert Misfire.calls == 2 and result['report']['score'] > 0
+
+
+def test_target_title_overrides_the_extracted_one():
+    result = asyncio.run(run_workflow(request(target_title='Reporting Analyst'), NoProposals(), silent))
+    assert result['job']['title'] == 'Reporting Analyst'

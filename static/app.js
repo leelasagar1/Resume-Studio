@@ -58,7 +58,7 @@ async function startRun(demo) {
     const result = await api(demo ? '/api/demo' : '/api/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: demo ? '{}' : JSON.stringify({ resume_text: $('resume-text').value.trim(),
-        job_text: $('job-text').value.trim(), additional_facts: $('facts').value.trim(),
+        job_text: $('job-text').value.trim(), target_title: $('target-title').value.trim(), additional_facts: $('facts').value.trim(),
         provider: $('provider').value, model: $('model').value.trim(),
         confirmed: $('confirmed').checked, max_revisions: Number($('revisions').value), target_score: Number($('target').value) })
     });
@@ -168,7 +168,7 @@ function renderResult(job) {
     for (const rule of report.eligibility) {
       const box = el('div', undefined, 'coverage-item'), heading = el('div', undefined, 'coverage-heading');
       heading.append(el('h4', rule.text), el('span', rule.status, 'coverage-badge ' + (rule.status === 'met' ? '' : rule.status === 'unknown' ? 'partial' : 'gap')));
-      box.append(heading, el('p', rule.reason)); eligibility.append(box);
+      box.append(heading, el('p', rule.reason + (rule.alternative_to ? ` This is an alternative to the rule above; meeting either one is enough.` : ''))); eligibility.append(box);
     }
   }
   const questions = $('questions'); questions.replaceChildren();

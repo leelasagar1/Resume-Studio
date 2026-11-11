@@ -70,13 +70,39 @@ anyone who should not see it.
 model must support structured JSON output. Tested live with `gpt-4.1-mini`
 and `claude-sonnet-5`.
 
+## Long master resumes
+
+Paste or upload a multi-page master resume (up to 60,000 characters, PDF up to
+25 pages) with every role and every bullet you have. The app picks what fits
+the job:
+
+- Repeated page headers (your name and contact on every page) and page
+  numbers are removed before parsing, and bullet markers from Word lists and
+  PDFs are kept, so a short bullet is never mistaken for a section name.
+- Each role writer sees that role's 12 most job-relevant source bullets and
+  returns 5-6; the summary writer sees the 4 strongest per role.
+- Past about 120 source lines, each call sees only the lines it needs (the
+  audit checks each claim against the lines it cites), so tokens grow with
+  what is used, not with the length of the document.
+- The token budget scales with the resume's length; `MAX_RUN_TOKENS` stays
+  the floor.
+
+A fictional 22,000-character, 7-role, 142-bullet master resume ran in about
+75 seconds for about $0.025 with gpt-5.6-luna.
+
 ## How it works
 
 1. **Extract** (1 call). The model pulls the job title, up to 60 ATS keywords
    with aliases (`Machine Learning` → `ML`, `Spark` → `PySpark`), a
    required/preferred priority for each, and any explicit screening rules
    (degree, years, location). Python discards any keyword that does not
-   literally appear in the job text.
+   literally appear in the job text. A section heading is never taken as the
+   title ("MINIMUM REQUIREMENTS"): enter the **Target job title** field when the
+   posting does not start with one; with no title, its 10 points go to the
+   keywords. Items that appear only in an "at least 2 of the following",
+   "such as" or "e.g." list are preferred, not required, since any one of
+   them satisfies the ad. An "Alternatively, ..." screening rule counts as
+   either/or with the rule before it.
 2. **Score the original** (no call). Deterministic keyword matching gives the
    "before" score.
 3. **Write** (one small call per role plus one for the header, in parallel).
@@ -87,24 +113,28 @@ and `claude-sonnet-5`.
    missing. Each role call sees only that role's source lines and returns
    5-6 bullets; the header call returns summary, headline and skill groups.
    Small outputs are what cheap models do reliably. The header call runs
-   after the role calls so the summary can cite the strongest final
-   bullets: three sentences (identity with years and specialization,
-   proof with real metrics, fit with the job's tools), checked by Python
-   for length, role name, years, keyword count and banned filler. On
+   in parallel with the role calls and reads the candidate's own bullets:
+   three sentences (identity with years and specialization, proof with real
+   metrics, fit with the job's tools), checked by Python for length, role
+   name, years, keyword count and banned filler. The identity is the title
+   the candidate actually held; the headline carries the target title. A
+   seniority the evidence never shows ("Senior" when no role was senior) is
+   removed by Python before the audit ever sees it. On
    revision only the roles named in the feedback are rewritten. Python reassembles the resume
    around the verbatim skeleton,
    so companies, titles, dates, degrees and certifications cannot be changed
    or dropped. Every bullet and summary line cites the evidence lines that
    support it.
    Keywords your resume never mentions go into the **Skills section** tagged
-   as unevidenced. An evidence-backed bullet can never contain one, and Python
+   as unevidenced; Python adds any the writer left out, required first. An evidence-backed bullet can never contain one, and Python
    enforces that check. If a bullet slips one in, one small **repair** call
    rewrites just those bullets instead of regenerating the resume.
    Python also verifies that every dated entry in your source survived.
    Each role keeps 5 to 6 bullets: the writer picks the most relevant, Python
    trims the least relevant beyond 6 (never a proposed bullet or the only
    bullet carrying a matched keyword) and backfills below 5 with the role's
-   most relevant original lines. Every bullet is checked against a standard
+   most relevant original lines. Roles that ended more than ten years ago are
+   condensed to 2-3 bullets and never receive proposed bullets. Every bullet is checked against a standard
    (capitalized action verb, 10 to 30 words, no first person, no cliches);
    failures go to the repair call.
    The Skills section is curated the way a recruiter reads it: at most 5
@@ -112,9 +142,11 @@ and `claude-sonnet-5`.
    demonstrate (orphan tools are dropped), the candidate's own spelling
    (TensorFlow, not tensorflow), no soft skills, degrees or screening
    phrases, compounds deduplicated ("AWS SageMaker" folds into "AWS
-   (SageMaker, S3, Glue)"), and at most 10 unverified job terms, required
+   (SageMaker, S3, Glue)"), and at most 12 unverified job terms, required
    first. Soft skills and degree fields are reported separately and do not
-   count toward the keyword score.
+   count toward the keyword score, and neither do qualities or lone generic
+   words ("robust models", "decision-driven", "engineering"): no recruiter
+   searches for them, and scoring them made 90 unreachable.
 4. **Propose** (1 small call when needed). Job skills should show up in
    experience bullets, not only in Skills. Python lists every job skill,
    required and preferred, that appears in no bullet. The model receives a
@@ -127,31 +159,39 @@ and `claude-sonnet-5`.
    Python then rejects any proposal that names a tool which did not exist
    during that employment period, whose rationale names a different employer,
    that borrows another role's tools, that carries a number, or that adds no
-   missing skill at all. At most 3 per role and 10 per run.
+   missing skill at all. At most 2 per role and 10 per run. Each skill is
+   offered to the proposer once; accepted proposals are carried into later
+   rounds instead of being drafted and reviewed again.
    Proposed bullets are highlighted in the preview and **deleted unless you
    tick them** on the confirm screen. They are a prompt to remember work you
    did but never wrote down, not a claim about you.
-5. **Audit** (1 call, chunked in parallel for long resumes). A second model
+5. **Audit** (small parallel calls: claims in chunks of 12, plus one for
+   proposals and screening rules). A second model
    pass checks each reworded claim against its cited evidence. It also judges
    every proposed bullet on three separate verdicts: **practical** (ordinary
    work for that company, team and title), **relevant** (matters for the
    target job) and **period consistent** (those tools existed then). A
    proposal survives only if all three hold; the reviewer's one-line reason
    is shown next to it on the confirm screen. The audit also judges the
-   screening rules and lists facts that would help. Verbatim lines are not
-   sent for audit.
-6. **Revise** (up to 3 rounds, default 2). If the score is below target or the
-   audit found an unsupported statement, the writer gets the exact missing
-   keywords and factual issues back. If revisions run out, unsupported bullets
+   screening rules and lists facts that would help. Verbatim lines, and the
+   name, contact, role headings and dates Python copied from your resume, are
+   not sent for audit. Verdicts are cached by claim text, so a later round
+   audits only what changed.
+6. **Revise** (up to 3 rounds, default 2). Up to four unsupported statements
+   are fixed in place: one repair call and a re-audit of just those lines.
+   A new writing round runs only when something can still change: more
+   unsupported statements, or job keywords your evidence has that no bullet
+   shows yet. The writer then gets the exact missing keywords and factual
+   issues back. If revisions run out, unsupported bullets
    are removed automatically rather than shipped.
 7. **Confirm**. Proposed bullets and unevidenced skills are listed with
    checkboxes and highlighted in the preview. Uncheck anything you did not do
    or could not discuss in an interview. The score is recomputed and the Word
    file is generated.
 
-Typical live run with gpt-4.1-mini everywhere and gpt-4.1-nano for the
-repair/propose calls: 10-15 small calls, 45-80 seconds, about 50k input and
-8k output tokens, roughly $0.03. The run report shows the estimate.
+Typical live run with gpt-5.6-luna on the demo resume: one round, 10-13
+small calls, 60-80 seconds, about 35k input and 8k output tokens, roughly
+$0.02. The run report shows the estimate.
 
 ### Model settings for GPT-5.6 Luna
 

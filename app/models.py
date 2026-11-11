@@ -9,8 +9,10 @@ class StrictModel(BaseModel):
 
 
 class GenerateRequest(StrictModel):
-    resume_text: str = Field(min_length=80, max_length=16000)
-    job_text: str = Field(min_length=80, max_length=14000)
+    # A multi-page master resume with detailed experience fits comfortably.
+    resume_text: str = Field(min_length=80, max_length=60000)
+    job_text: str = Field(min_length=80, max_length=20000)
+    target_title: str = Field(default='', max_length=120)
     additional_facts: str = Field(default='', max_length=4000)
     confirmed: Literal[True]
     max_revisions: int = Field(default=2, ge=0, le=3)

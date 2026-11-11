@@ -2,9 +2,10 @@ import re
 from difflib import SequenceMatcher
 from .agents import BudgetExceeded
 from .documents import render_docx
-from .models import Audit, Claim, ClaimCheck, Resume, claims, proposed_claims, skill_items, resume_plain_text
-from .skeleton import assemble, best_group, clean_markdown, parse_resume, skeleton_payload, strip_pasted_job
-from .scoring import (count_occurrences, ground_profile, inflected_occurrences, keyword_hits, keyword_in_evidence,
+from .models import Audit, Claim, ClaimCheck, Resume, SkillItem, claims, proposed_claims, skill_items, resume_plain_text
+from .skeleton import (assemble, best_group, bullet_evidence_ids, clean_markdown, parse_resume, skeleton_payload, strip_page_furniture,
+                       strip_pasted_job)
+from .scoring import (_similar, count_occurrences, ground_profile, inflected_occurrences, keyword_hits, keyword_in_evidence,
                       normalize, score_resume)
 
 NUMBER = r'\d+(?:[.,]\d+)*%?'
@@ -29,6 +30,16 @@ def keyword_status(ats, profile, evidence):
                         'placement': 'anywhere the evidence supports it' if in_evidence
                         else 'ONLY as a Skills item with empty evidence_ids'})
     return {'matched': [r['term'] for r in ats['keywords'] if r['matched']], 'missing': missing}
+
+
+def inflection_of(a, b):
+    """Another form of the same words ("containerized" / "containerization",
+    "data engineer" / "data engineering"): the source used it as prose or a
+    title, so it is not the skill's name. A product spelling ("PyTorch" for
+    torch) is not an inflection."""
+    wa, wb = a.split(), b.split()
+    return a != b and len(wa) == len(wb) and all(_similar(x, y) for x, y in zip(wa, wb)) \
+        and not all(re.sub(r'(es|s)$', '', x) == re.sub(r'(es|s)$', '', y) for x, y in zip(wa, wb))
 
 
 def normalize_skills(resume, evidence, profile):
@@ -81,8 +92,17 @@ def normalize_skills(resume, evidence, profile):
         item.evidence_ids = list(dict.fromkeys(hits))[:3]
         if item.evidence_ids and len(parts) == 1:
             spelled = source_spelling(parts[0])
-            if spelled:
+            # Only the same word in the candidate's casing (tensorflow -> TensorFlow).
+            # An alias or inflection found in prose ("Containerized" for
+            # containerization, "Data Engineer" for data engineering) is not a skill name.
+            # Never trade casing for less of it ("Pandas" -> "pandas", "Data
+            # Science" -> "data-science"); the point is TensorFlow, PyTorch.
+            if (spelled and not inflection_of(normalize(spelled), parts[0])
+                    and sum(c.isupper() for c in spelled) >= sum(c.isupper() for c in item.text)
+                    and not (spelled.islower() and spelled == item.text.lower().replace(' ', '-'))):
                 item.text = spelled
+            elif item.text.islower() and len(parts[0].split()) > 1:
+                item.text = item.text[0].upper() + item.text[1:]
     curate_skills(resume, evidence, profile)
     # Skill groups nested inside an entries section (Work Experience) get their
     # own Skills section right after it, so the heading renders.
@@ -235,6 +255,36 @@ def curate_skills(resume, evidence, profile):
     return resume
 
 
+KIND_LABELS = {'tool': 'Tools Platforms Technologies Frameworks Languages Cloud Data',
+               'skill': 'Methods Techniques Machine Learning Analytics Skills',
+               'method': 'Methods Techniques Machine Learning Analytics Modeling',
+               'domain': 'Domains Methods Industry Analytics'}
+
+
+def offer_missing_skills(resume, evidence, profile):
+    """Missing job skills the evidence lacks go straight into Skills as
+    unconfirmed items (empty evidence), required first, within the cap. The
+    candidate ticks the ones they have; the rest never reach the document.
+    Doing this here costs nothing, where waiting for a writer to do it costs a
+    round."""
+    home = next((s for s in resume.sections if s.skill_groups and not s.entries), None)
+    if home is None:
+        return resume, 0
+    normalized_evidence = normalize(' '.join(evidence.values()))
+    text = normalize(resume_plain_text(resume))
+    slots = MAX_UNVERIFIED_SKILLS - len(unverified_terms(resume))
+    wanted = [k for k in sorted(profile.keywords, key=lambda k: k.priority != 'required')
+              if k.kind in KIND_LABELS and len(k.term.split()) <= 4 and not CREDENTIAL.search(k.term)
+              and not keyword_hits(k, text) and not keyword_in_evidence(k, normalized_evidence)]
+    added = 0
+    for keyword in wanted[:max(0, slots)]:
+        group = best_group(KIND_LABELS[keyword.kind], home.skill_groups) or home.skill_groups[-1]
+        text = keyword.term[0].upper() + keyword.term[1:] if keyword.term.islower() else keyword.term
+        group.items.append(SkillItem(text=text, evidence_ids=[]))
+        added += 1
+    return resume, added
+
+
 def unverified_terms(resume):
     return list(dict.fromkeys(i.text for i in skill_items(resume) if not i.evidence_ids))
 
@@ -270,10 +320,10 @@ def date_ranges(text):
 
 MAX_SKILLS_PER_GROUP = 8
 MAX_SKILL_GROUPS = 5
-MAX_PROPOSED_PER_ROLE = 3
+MAX_PROPOSED_PER_ROLE = 2   # keeps a role at 5 evidence bullets + 2 proposals at most
 MAX_PROPOSED_TOTAL = 10
-MAX_UNVERIFIED_SKILLS = 10
-MAX_BULLETS = 7          # total per role, proposed bullets included
+MAX_UNVERIFIED_SKILLS = 12   # job skills offered for confirmation, required first
+MAX_BULLETS = 6          # total per role; proposed bullets are never trimmed
 MIN_BULLETS = 5          # evidence-backed bullets per role (or the source count if fewer)
 CREDENTIAL = re.compile(r"\b(degree|bachelor|master|phd|doctorate|diploma|certification|certified|assessments?|years?\b.{0,12}experience|"
                         r"experience\b.{0,12}years?|related field|equivalent experience)\b", re.I)
@@ -357,7 +407,7 @@ def backfill_bullets(resume, evidence, profile, floor=MIN_BULLETS):
         for entry in section.entries:
             keys = entry_keys(entry.heading.text + ' ' + (entry.detail.text if entry.detail else ''))
             source = next((groups[k] for k in keys if k in groups), [])
-            target = min(floor, len(source))
+            target = min(floor, bullet_range(entry)[0], len(source))
             evidenced = [b for b in entry.bullets if not b.proposed]
             if len(evidenced) >= target:
                 continue
@@ -395,9 +445,10 @@ def trim_bullets(resume, profile, max_per_entry=MAX_BULLETS):
     removed = 0
     for section in resume.sections:
         for entry in section.entries:
-            while len(entry.bullets) > max_per_entry:
+            low, high = bullet_range(entry)
+            while len(entry.bullets) > min(max_per_entry, high):
                 candidates = [b for b in entry.bullets if not b.proposed]
-                if len(candidates) <= MIN_BULLETS:
+                if len(candidates) <= low:
                     break
                 others = normalize(experience_text_without(resume, None))
                 ranked = sorted(candidates, key=lambda b: (bullet_relevance(b, profile), -entry.bullets.index(b)))
@@ -481,8 +532,15 @@ def summary_issues(resume, evidence, profile):
     core = normalize(profile.title)
     role_noun = ' '.join(w for w in core.split() if w not in ('senior', 'sr', 'junior', 'jr', 'lead', 'principal', 'staff', 'ii', 'iii', 'i'))
     first_sentence = normalize(resume.summary[0].text)
-    if role_noun and role_noun not in first_sentence and normalize(resume.headline) not in first_sentence:
-        issues.append(f'{first}: the first sentence must name the role ("{profile.title}" or the closest honest variant).')
+    held = [normalize(re.split(r'\s+[—–|@-]\s+|\s+at\s+|,|\|', e.heading.text)[0])
+            for s in resume.sections for e in s.entries if e.bullets]
+    names_role = any(t and t in first_sentence for t in [role_noun, normalize(resume.headline), *held])
+    if not names_role:
+        current = re.split(r'\s+[—–|@-]\s+|\s+at\s+|,|\|', next(
+            (e.heading.text for s in resume.sections for e in s.entries if e.bullets), profile.title))[0].strip()
+        target = f', or "{profile.title}" only if they held it' if profile.title else ''
+        issues.append(f'{first}: the first sentence must name what the candidate is: their current title '
+                      f'("{current}"){target}.')
     if re.search(r'\d+\s*\+?\s*years', ' '.join(evidence.values()), re.I) and not re.search(r'\d+\s*\+?\s*years', text, re.I):
         issues.append(f'{first}: state the years of experience the source gives.')
     scorable = [k for k in profile.keywords if k.kind not in ('credential', 'soft')]
@@ -490,6 +548,27 @@ def summary_issues(resume, evidence, profile):
     if len(scorable) >= 3 and hits < 3:
         issues.append(f'{first}: the summary names only {hits} job keyword(s); include at least 3 that the evidence supports.')
     return issues
+
+
+SENIORITY = ('senior', 'sr', 'junior', 'jr', 'lead', 'principal', 'staff', 'ii', 'iii', 'i')
+
+
+def demote_unheld_title(resume, evidence, profile):
+    """The headline may name the target job; the summary may not claim it as a
+    held title. "Senior Data Scientist with 5 years" becomes "Data Scientist
+    with 5 years" when the source never shows the seniority, instead of costing
+    an audit round to learn that."""
+    title = normalize(profile.title)
+    words = title.split()
+    core = ' '.join(w for w in words if w not in SENIORITY)
+    source = normalize(' '.join(evidence.values()))
+    if not core or core == title or count_occurrences(title, source) or not count_occurrences(core, source):
+        return resume
+    pattern = re.compile(r'\b' + r'[\s-]+'.join(re.escape(w) for w in profile.title.split()) + r'\b', re.I)
+    core_text = ' '.join(w for w in profile.title.split() if normalize(w) not in SENIORITY)
+    for claim in resume.summary:
+        claim.text = pattern.sub(core_text, claim.text)
+    return resume
 
 
 def validate_draft(resume, evidence, profile):
@@ -529,7 +608,7 @@ def validate_draft(resume, evidence, profile):
                     issues.append(f'{bullet.id}: remove the leading bullet marker; Word supplies bullets.')
             keys = entry_keys(entry.heading.text + ' ' + (entry.detail.text if entry.detail else ''))
             available = max((source_counts.get(k, 0) for k in keys), default=0)
-            required = min(MIN_BULLETS, available)
+            required = min(bullet_range(entry)[0], available)
             evidenced = [b for b in entry.bullets if not b.proposed]
             if required and len(evidenced) < required:
                 issues.append(f'{entry.heading.id}: keep at least {required} evidence-backed bullets for this role '
@@ -587,11 +666,20 @@ async def repair_locally(provider, evidence, profile, draft, local):
 
 
 def claims_to_audit(resume, evidence):
-    """Skip claims that are verbatim source lines; the model audits the rest."""
+    """Skip claims that are verbatim source lines; the model audits the rest.
+    Name, contact, role headings and date lines are rebuilt from the source by
+    the skeleton, never written by a model, so they are skipped too (a joined
+    "dates | location" line otherwise fails for citing only one source line)."""
     lines = {normalize(v) for v in evidence.values()}
+    fixed = {resume.name.id, *(c.id for c in resume.contact)}
+    for section in resume.sections:
+        for entry in section.entries:
+            fixed.add(entry.heading.id)
+            if entry.detail:
+                fixed.add(entry.detail.id)
     selected = []
     for c in claims(resume):
-        if c.proposed:
+        if c.proposed or c.id in fixed:
             continue
         text = normalize(c.text)
         if text in lines or any(text and text in line for line in lines):
@@ -630,8 +718,8 @@ def proposals(resume, evidence, profile, fit_reasons=None, review_notes=None):
                 if not bullet.proposed:
                     continue
                 text = normalize(bullet.text)
-                terms = [k.term for k in profile.keywords
-                         if keyword_hits(k, text) and not keyword_in_evidence(k, normalized_evidence)]
+                terms = [k.term for k in profile.keywords if k.kind not in ('credential', 'soft')
+                         and keyword_hits(k, text) and not keyword_in_evidence(k, normalized_evidence)]
                 result.append({'id': bullet.id, 'text': bullet.text, 'terms': terms,
                                'fit_reason': fit_reasons.get(bullet.id, ''),
                                'review_note': review_notes.get(bullet.id, ''),
@@ -673,6 +761,21 @@ def role_period(entry):
         return None, None
     end = date.today().year if re.search(r'present|current|now', text, re.I) else max(years)
     return min(years), end
+
+
+OLD_ROLE_YEARS = 10
+OLD_ROLE_BULLETS = (2, 3)
+
+
+def bullet_range(entry):
+    """(fewest, most) bullets for a role. Roles that ended more than ten years
+    ago are condensed, as recruiters expect: a master resume with an internship
+    from 2012 should not spend five bullets on it."""
+    from datetime import date
+    _, end = role_period(entry)
+    if end is not None and end < date.today().year - OLD_ROLE_YEARS:
+        return OLD_ROLE_BULLETS
+    return MIN_BULLETS, MAX_BULLETS
 
 
 def anachronistic(text, entry):
@@ -741,7 +844,9 @@ async def add_proposed_bullets(provider, evidence, profile, draft, gaps):
         return draft, 0, fit_reasons
     # Only roles that have bullets (jobs, projects) can host a proposed bullet;
     # never degrees or certifications.
-    entries = {e.heading.id: e for s in draft.sections for e in s.entries if any(not b.proposed for b in e.bullets)}
+    # Condensed older roles (ten+ years ago) never host one either.
+    entries = {e.heading.id: e for s in draft.sections for e in s.entries
+               if any(not b.proposed for b in e.bullets) and bullet_range(e) != OLD_ROLE_BULLETS}
     by_term = {normalize(k.term): k for k in profile.keywords}
     existing = {c.id for c in claims(draft)}
     proposals = await provider.propose(evidence, profile, draft, gaps, role_profiles(draft))
@@ -943,6 +1048,21 @@ def drop_claims(resume, ids):
     return resume
 
 
+ALTERNATIVE_RULE = re.compile(r'^\W*(alternatively|or\b|otherwise|in lieu)', re.I)
+
+
+def eligibility_groups(rules):
+    """Screening rules as either/or groups: a rule that opens with
+    "Alternatively" / "Or" can satisfy the requirement of the rule before it."""
+    groups = []
+    for rule in rules:
+        if groups and ALTERNATIVE_RULE.search(rule.text):
+            groups[-1].append(rule.id)
+        else:
+            groups.append([rule.id])
+    return groups
+
+
 def evaluate(profile, resume, audit, local_issues):
     ats = score_resume(profile, resume_plain_text(resume))
     unsupported = [c for c in audit.claim_checks if not c.supported]
@@ -960,23 +1080,55 @@ def evaluate(profile, resume, audit, local_issues):
             eligibility.append({'id': rule.id, 'text': rule.text, 'kind': rule.kind,
                                 'status': 'unknown', 'reason': 'Not assessed.'})
     factual_issues = list(local_issues) + [f'{c.claim_id}: {c.reason}' for c in unsupported]
+    groups = eligibility_groups(profile.eligibility)
+    status = {e['id']: e['status'] for e in eligibility}
+    for group in groups:
+        for rule_id in group[1:]:
+            entry = next(e for e in eligibility if e['id'] == rule_id)
+            entry['alternative_to'] = group[0]
     return {
         'score': ats['score'], 'components': ats['components'], 'keywords': ats['keywords'],
         'missing': ats['missing'], 'factual_pass': not factual_issues,
         'factual_issues': factual_issues, 'unsupported_ids': [c.claim_id for c in unsupported],
-        'eligibility': eligibility, 'eligible': all(e['status'] == 'met' for e in eligibility),
+        'eligibility': eligibility,
+        'eligible': all(any(status.get(r) == 'met' for r in group) for group in groups),
         'questions': list(audit.questions)[:5], 'unverified_terms': unverified_terms(resume),
         'proposed_count': len(proposed_claims(resume)),
     }
 
 
-async def complete_audit(provider, evidence, draft, profile):
+def claim_key(claim):
+    return normalize(claim.text), tuple(sorted(claim.evidence_ids))
+
+
+async def complete_audit(provider, evidence, draft, profile, cache=None):
     """Audit every non-verbatim claim exactly once; a missed claim gets one
-    targeted retry and is otherwise treated as unsupported."""
+    targeted retry and is otherwise treated as unsupported. Verdicts are cached
+    by claim text and citations, so a revision round audits only what changed,
+    and eligibility (judged on the evidence, not the draft) is judged once."""
+    cache = {} if cache is None else cache
+    claim_cache = cache.setdefault('claims', {})
+    proposal_cache = cache.setdefault('proposals', {})
     targets = claims_to_audit(draft, evidence)
     expected = {c.id for c in targets}
     proposed = proposed_claims(draft)
-    audit = await provider.audit(evidence, targets, profile.eligibility, proposed)
+    fresh = [c for c in targets if claim_key(c) not in claim_cache]
+    fresh_proposed = [c for c in proposed if claim_key(c) not in proposal_cache]
+    rules = [] if 'eligibility' in cache else profile.eligibility
+    if fresh or fresh_proposed or rules:
+        audit = await provider.audit(evidence, fresh, rules, fresh_proposed)
+    else:
+        audit = Audit(claim_checks=[], proposal_checks=[], eligibility=[], questions=[])
+    if 'eligibility' not in cache:
+        cache['eligibility'], cache['questions'] = list(audit.eligibility), list(audit.questions)
+    audit.eligibility, audit.questions = list(cache['eligibility']), list(cache['questions'])
+    # Proposals: fresh verdicts are remembered by text; cached ones are reused.
+    fresh_ids = {c.id: c for c in fresh_proposed}
+    for check in audit.proposal_checks:
+        if check.claim_id in fresh_ids:
+            proposal_cache[claim_key(fresh_ids[check.claim_id])] = check
+    audit.proposal_checks = [proposal_cache[claim_key(c)].model_copy(update={'claim_id': c.id})
+                             for c in proposed if claim_key(c) in proposal_cache]
     # A proposal survives only if the reviewer finds it practical for that
     # company and role, relevant to the job, and possible in that period.
     suitable = {c.claim_id for c in audit.proposal_checks
@@ -985,31 +1137,80 @@ async def complete_audit(provider, evidence, draft, profile):
     drop_claims(draft, set(rejected))
     audit.proposal_checks = [c for c in audit.proposal_checks if c.claim_id in suitable]
     checks = {}
+    fresh_expected = {c.id for c in fresh}
     for check in audit.claim_checks:
-        if check.claim_id in expected:
+        if check.claim_id in fresh_expected:
             prior = checks.get(check.claim_id)
             if prior is None or (prior.supported and not check.supported):
                 checks[check.claim_id] = check
-    missing = expected - set(checks)
+    missing = fresh_expected - set(checks)
     if missing:
-        retry = await provider.audit(evidence, [c for c in targets if c.id in missing], [])
+        retry = await provider.audit(evidence, [c for c in fresh if c.id in missing], [])
         for check in retry.claim_checks:
             if check.claim_id in missing:
                 checks[check.claim_id] = check
         for claim_id in missing - set(checks):
             checks[claim_id] = ClaimCheck(claim_id=claim_id, supported=False,
                                           reason='Not audited; reworded or removed conservatively.')
-    audit.claim_checks = list(checks.values())
+    for claim in fresh:
+        claim_cache[claim_key(claim)] = checks[claim.id]
+    for claim in targets:
+        if claim.id not in checks:
+            checks[claim.id] = claim_cache[claim_key(claim)].model_copy(update={'claim_id': claim.id})
+    audit.claim_checks = [checks[c] for c in expected]
     return audit, rejected
 
 
+def restore_proposals(draft, kept):
+    """Proposals the reviewer already accepted come back if a rewrite dropped
+    them, so later rounds never pay to propose and review them again."""
+    entries = {e.heading.id: e for s in draft.sections for e in s.entries}
+    present = {c.id for c in claims(draft)}
+    texts = {normalize(c.text) for c in claims(draft)}
+    for entry_id, claim in kept.values():
+        if entry_id in entries and claim.id not in present and normalize(claim.text) not in texts:
+            entries[entry_id].bullets.append(claim.model_copy())
+    return draft
+
+
+def evidenced_gaps(gaps, profile, evidence):
+    """Gaps the writer can still close from the candidate's own evidence.
+    The rest can only be covered by proposals, which are drafted once."""
+    normalized_evidence = normalize(' '.join(evidence.values()))
+    by_term = {k.term: k for k in profile.keywords}
+    return [g for g in gaps if g in by_term and keyword_in_evidence(by_term[g], normalized_evidence)]
+
+
 async def run_workflow(request, provider, emit):
-    resume_text = clean_markdown(strip_pasted_job(request.resume_text, request.job_text))
+    marked_text = strip_page_furniture(strip_pasted_job(request.resume_text, request.job_text))
+    resume_text = clean_markdown(marked_text)
+    # A long master resume needs proportionally more tokens; the configured cap
+    # stays the floor so a normal resume is unaffected.
+    if hasattr(provider, 'limit'):
+        provider.limit = max(provider.limit, 16 * len(resume_text))
     evidence = make_evidence(resume_text + '\n' + request.additional_facts)
     await emit('analyzing', 'Extracting the job’s ATS keywords', 10)
-    profile = ground_profile(await provider.profile(request.job_text), request.job_text)
-    skeleton = parse_resume(evidence)
+    # An empty or ungrounded extraction is an occasional model misfire (seen on
+    # ads that are only a requirements list); ask again before giving up.
+    for attempt in range(3):
+        try:
+            profile = ground_profile(await provider.profile(request.job_text), request.job_text)
+            break
+        except ValueError:
+            if attempt == 2:
+                raise
+    if request.target_title.strip():
+        profile.title = ' '.join(request.target_title.split())
+    skeleton = parse_resume(evidence, frozenset(bullet_evidence_ids(marked_text)))
     payload = skeleton_payload(skeleton)
+    source_style = source_style_report(evidence)
+    payload['source_reads_machine_written'] = source_style['reads_machine_written']
+    from types import SimpleNamespace
+    for section in payload['sections']:
+        for entry in section['entries']:
+            low, high = bullet_range(SimpleNamespace(heading=SimpleNamespace(text=entry['heading']),
+                                                     detail=SimpleNamespace(text=entry['detail']) if entry['detail'] else None))
+            entry['bullet_count'] = f'{low}-{high}'
     before = score_resume(profile, resume_text)
     status = keyword_status(before, profile, evidence)
     best = None
@@ -1018,6 +1219,9 @@ async def run_workflow(request, provider, emit):
     last_result = None
     fit_reasons = {}
     review_notes = {}
+    audit_cache = {}
+    attempted_gaps = set()   # job skills already sent to the proposer
+    kept_proposals = {}      # claim id -> (entry id, claim) the reviewer accepted
     rounds = request.max_revisions + 1
     stop_reason = 'Revision limit reached; the best factual version was kept.'
     try:
@@ -1027,39 +1231,52 @@ async def run_workflow(request, provider, emit):
                        15 + version * step)
             rewrite = await provider.write(evidence, profile, status, payload, previous, feedback)
             draft = normalize_skills(assemble(skeleton, rewrite, evidence), evidence, profile)
+            draft = restore_proposals(draft, kept_proposals)
+            draft, _ = offer_missing_skills(draft, evidence, profile)
+            draft = demote_unheld_title(draft, evidence, profile)
             draft, backfilled = backfill_bullets(draft, evidence, profile)
             draft = tidy_layout(draft)
-            local = validate_draft(draft, evidence, profile)
             source_lines = {normalize(v) for v in evidence.values()}
-            style = style_issues(draft, source_lines)
-            repaired = []
-            if local or style:
-                await emit('writing', 'Repairing bullets that overstate your evidence or read as generated',
-                           15 + version * step + step // 3)
-                repaired = local + style
-                draft, local = await repair_locally(provider, evidence, profile, draft, local + style)
-            # Wording is polish: it drives another writing round but must never
-            # fail a run the way an unsupported claim does.
             summary_ids = {c.id for c in draft.summary}
-            polish = [i for i in local if i.split(':', 1)[0] in summary_ids]
-            local = [i for i in local if i not in polish]
-            gaps = [] if local else skill_gaps(draft, profile)
+            is_polish = lambda issue: issue.split(':', 1)[0] in summary_ids
+            local = [i for i in validate_draft(draft, evidence, profile) if not is_polish(i)]
+            repaired = []
+            if local:
+                await emit('writing', 'Repairing bullets that overstate your evidence',
+                           15 + version * step + step // 3)
+                repaired = list(local)
+                draft, local = await repair_locally(provider, evidence, profile, draft, local)
+                local = [i for i in local if not is_polish(i)]
+            # Proposals are drafted once per job skill; a skill the proposer or
+            # reviewer could not place is not retried in later rounds.
+            gaps = [] if local else [g for g in skill_gaps(draft, profile) if g not in attempted_gaps]
             if gaps:
                 await emit('writing', 'Drafting practical bullets for the job skills your resume does not mention',
                            15 + version * step + step // 3)
+                attempted_gaps.update(gaps)
                 draft, _, reasons = await add_proposed_bullets(provider, evidence, profile, draft, gaps)
                 fit_reasons.update(reasons)
             draft, _ = prune_pointless_proposals(draft, evidence, profile)
             draft, trimmed = trim_bullets(draft, profile)
-            draft, restored = restore_source_wording(draft, evidence, profile)
-            # Measure the final bullet set, proposals included, and give it one
-            # cheap pass to break up any remaining uniformity.
-            remaining_style = style_issues(draft, source_lines)
-            if remaining_style:
+            # The candidate's own sentences come back only when they read as a
+            # person wrote them; restoring a machine-sounding source would undo
+            # the style repair.
+            draft, restored = ((draft, 0) if source_style['reads_machine_written']
+                               else restore_source_wording(draft, evidence, profile))
+            # One polish pass over the final bullet set, proposals included:
+            # summary wording plus anything that reads as generated. Polish
+            # never fails a run and never by itself buys another round.
+            polish = ([i for i in validate_draft(draft, evidence, profile) if is_polish(i)]
+                      + style_issues(draft, source_lines))
+            if polish:
                 await emit('writing', 'Varying the wording so the resume reads as human-written',
                            15 + version * step + step // 2)
-                draft, _ = await repair_locally(provider, evidence, profile, draft, remaining_style)
-            polish += style_issues(draft, source_lines)
+                repaired += polish
+                draft, after = await repair_locally(provider, evidence, profile, draft, polish)
+                # A reworded proposal can lose the job skill it was there for.
+                draft, _ = prune_pointless_proposals(draft, evidence, profile)
+                local = [i for i in after if not is_polish(i)]
+                polish = [i for i in after if is_polish(i)] + style_issues(draft, source_lines)
             ats = score_resume(profile, resume_plain_text(draft))
             status = keyword_status(ats, profile, evidence)
             if local and version < rounds - 1:
@@ -1070,14 +1287,37 @@ async def run_workflow(request, provider, emit):
                                              'factual_issues': []}
                 continue
             await emit('reviewing', 'Auditing every claim against your evidence', 15 + version * step + step // 2)
-            audit, rejected = await complete_audit(provider, evidence, draft, profile)
+            audit, rejected = await complete_audit(provider, evidence, draft, profile, audit_cache)
             review_notes.update({c.claim_id: c.reason for c in audit.proposal_checks})
+            entry_of = {b.id: e.heading.id for sec in draft.sections for e in sec.entries for b in e.bullets}
+            kept_proposals.update({c.id: (entry_of[c.id], c.model_copy()) for c in proposed_claims(draft)
+                                   if c.id in entry_of})
             ats = score_resume(profile, resume_plain_text(draft))
             status = keyword_status(ats, profile, evidence)
             result = evaluate(profile, draft, audit, local)
+            # A few unverified statements are fixed in place: one small repair
+            # call and a re-audit of only the reworded claims, instead of a full
+            # rewrite round that tends to trade one flagged sentence for another.
+            if not result['factual_pass'] and not local and 0 < len(result['unsupported_ids']) <= 4:
+                await emit('reviewing', 'Rewording the statements the audit could not verify',
+                           15 + version * step + 2 * step // 3)
+                ids = set(result['unsupported_ids'])
+                draft, after = await repair_locally(provider, evidence, profile, draft,
+                                                    [i for i in result['factual_issues'] if i.split(':', 1)[0] in ids])
+                draft, _ = prune_pointless_proposals(draft, evidence, profile)
+                local = [i for i in after if not is_polish(i)]
+                audit, more = await complete_audit(provider, evidence, draft, profile, audit_cache)
+                rejected += more
+                ats = score_resume(profile, resume_plain_text(draft))
+                status = keyword_status(ats, profile, evidence)
+                result = evaluate(profile, draft, audit, local)
             result['rejected_proposals'] = len(rejected)
             last_result = result
             result['bullet_gaps'] = bullet_gaps(draft, profile)
+            # Only gaps the writer can close from evidence justify another round;
+            # the rest were already offered to the proposer.
+            writable = evidenced_gaps(result['bullet_gaps'], profile, evidence)
+            open_keywords = [m for m in status['missing'] if m['in_candidate_evidence']]
             history.append({'version': version, 'score': result['score'], 'factual_pass': result['factual_pass'],
                             'audited': True, 'issues': result['factual_issues'][:6], 'repaired': repaired[:6],
                             'polish': polish[:4], 'bullet_gaps': result['bullet_gaps'],
@@ -1097,11 +1337,15 @@ async def run_workflow(request, provider, emit):
             rank = lambda item: (item['score'], not item.get('stripped'))
             if candidate[1]['factual_pass'] and (best is None or rank(candidate[1]) > rank(best[1])):
                 best = (*candidate, version)
-            if result['factual_pass'] and result['score'] >= request.target_score and not result['bullet_gaps']:
+            if result['factual_pass'] and result['score'] >= request.target_score:
                 stop_reason = 'Target ATS score reached with every statement supported by your evidence.'
                 break
             if result['factual_pass'] and not result['missing']:
                 stop_reason = 'Every job keyword is present; remaining points depend on title and format checks.'
+                break
+            if result['factual_pass'] and not writable and not open_keywords:
+                stop_reason = ('Every job keyword your evidence supports is in place; the rest need your '
+                               'confirmation of the proposed bullets.')
                 break
             previous_scores = [h['score'] for h in history[:-1] if h.get('audited')]
             if result['factual_pass'] and previous_scores and result['score'] - max(previous_scores) < 2:
@@ -1110,7 +1354,7 @@ async def run_workflow(request, provider, emit):
             previous = draft
             feedback = {'missing_keywords': result['missing'], 'factual_issues': result['factual_issues'],
                         'local_issues': local + polish,
-                        'required_keywords_absent_from_experience_bullets': result['bullet_gaps']}
+                        'required_keywords_absent_from_experience_bullets': writable}
     except BudgetExceeded:
         if best is None:
             raise
@@ -1126,7 +1370,7 @@ async def run_workflow(request, provider, emit):
               'before': {'score': before['score'], 'components': before['components'],
                          'matched': len(before['keywords']) - len(before['missing']), 'total': len(before['keywords'])},
               'usage': provider.usage() if hasattr(provider, 'usage') else {'calls': provider.calls, 'tokens': provider.tokens},
-              'source_style': source_style_report(evidence), 'evidence': evidence}
+              'source_style': source_style, 'evidence': evidence}
     terms = unverified_terms(draft)
     proposed = proposals(draft, evidence, profile, fit_reasons, review_notes)
     if terms or proposed:
